@@ -80,6 +80,25 @@ sudo chown -R "${CURRENT_USER}:${CURRENT_USER}" \
 [ -d "${CURRENT_HOME}/.local/bin" ] && chmod +x "${CURRENT_HOME}/.local/bin"/* 2>/dev/null || true
 [ -d "${CURRENT_HOME}/.local/share/keyrings" ] && chmod 700 "${CURRENT_HOME}/.local/share/keyrings" && chmod -f 600 "${CURRENT_HOME}/.local/share/keyrings"/* 2>/dev/null || true
 
+# Intelligent Keyring State Detection & Guidance
+if [ -d "${CURRENT_HOME}/.local/share/keyrings" ]; then
+  HAS_ENCRYPTED_KEYRING=false
+  for kr in "${CURRENT_HOME}/.local/share/keyrings"/*.keyring; do
+    [ -f "$kr" ] || continue
+    if head -c 12 "$kr" 2>/dev/null | grep -q "GnomeKeyring"; then
+      HAS_ENCRYPTED_KEYRING=true
+      break
+    fi
+  done
+  if [ "$HAS_ENCRYPTED_KEYRING" = true ]; then
+    echo "    [Keyring] Detected password-protected desktop keyring:"
+    echo "      * If your new computer uses the same login password as the old computer, PAM will unlock it automatically."
+    echo "      * If you set a different login password on this new computer, enter the OLD computer's password when prompted on first launch."
+  else
+    echo "    [Keyring] Desktop keyring restored (blank/auto-unlock mode)."
+  fi
+fi
+
 # 6. Restore system-level configs (sing-box, mihomo, v2raya, xray, v2ray, daed, proxychains)
 echo "==> 4. Restoring system-level configurations..."
 for etc_dir in sing-box mihomo v2raya xray v2ray daed; do
