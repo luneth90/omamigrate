@@ -48,6 +48,7 @@ if [ -n "${OLD_HOME}" ] && [ "${CURRENT_HOME}" != "${OLD_HOME}" ]; then
   [ -f "${CURRENT_HOME}/.claude.json" ] && sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" "${CURRENT_HOME}/.claude.json"
   [ -f "${CURRENT_HOME}/.gemini/antigravity-cli/settings.json" ] && sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" "${CURRENT_HOME}/.gemini/antigravity-cli/settings.json"
   [ -f "${CURRENT_HOME}/.config/git/config" ] && sed -i "s|!${OLD_HOME}.*gh auth git-credential|!gh auth git-credential|g" "${CURRENT_HOME}/.config/git/config"
+  [ -f "${CURRENT_HOME}/.ssh/config" ] && sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" "${CURRENT_HOME}/.ssh/config"
   [ -d "${CURRENT_HOME}/.thunderbird" ] && find "${CURRENT_HOME}/.thunderbird" -type f -name "*.ini" -exec sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" {} + 2>/dev/null || true
 
   # Adapt proxy configuration paths
@@ -74,7 +75,12 @@ sudo chown -R "${CURRENT_USER}:${CURRENT_USER}" \
   "${CURRENT_HOME}/.thunderbird" \
   "${CURRENT_HOME}/.proxychains" 2>/dev/null || true
 
-[ -d "${CURRENT_HOME}/.ssh" ] && chmod 700 "${CURRENT_HOME}/.ssh" && chmod -f 600 "${CURRENT_HOME}/.ssh"/id_* 2>/dev/null || true
+if [ -d "${CURRENT_HOME}/.ssh" ]; then
+  chmod 700 "${CURRENT_HOME}/.ssh"
+  find "${CURRENT_HOME}/.ssh" -type f -exec chmod 600 {} + 2>/dev/null || true
+  find "${CURRENT_HOME}/.ssh" -type f -name "*.pub" -exec chmod 644 {} + 2>/dev/null || true
+  [ -f "${CURRENT_HOME}/.ssh/known_hosts" ] && chmod 644 "${CURRENT_HOME}/.ssh/known_hosts" 2>/dev/null || true
+fi
 [ -d "${CURRENT_HOME}/.gnupg" ] && chmod 700 "${CURRENT_HOME}/.gnupg" && find "${CURRENT_HOME}/.gnupg" -type f -exec chmod 600 {} + 2>/dev/null || true
 [ -d "${CURRENT_HOME}/.password-store" ] && chmod 700 "${CURRENT_HOME}/.password-store"
 [ -d "${CURRENT_HOME}/.local/bin" ] && chmod +x "${CURRENT_HOME}/.local/bin"/* 2>/dev/null || true
