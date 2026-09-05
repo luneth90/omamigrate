@@ -41,8 +41,8 @@ if [ -d "${SCRIPT_DIR}/user_home" ]; then
 fi
 
 # 4. Smart Path Adaptation (replaces old machine username with current username)
-OLD_HOME="$(cat "${SCRIPT_DIR}/pkg_meta/source_home.txt" 2>/dev/null || echo "/home/xiaowei")"
-if [ "${CURRENT_HOME}" != "${OLD_HOME}" ]; then
+OLD_HOME="$(cat "${SCRIPT_DIR}/pkg_meta/source_home.txt" 2>/dev/null || true)"
+if [ -n "${OLD_HOME}" ] && [ "${CURRENT_HOME}" != "${OLD_HOME}" ]; then
   echo "==> 2. Adapting username paths (${OLD_HOME} -> ${CURRENT_HOME})..."
   [ -f "${CURRENT_HOME}/.codex/config.toml" ] && sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" "${CURRENT_HOME}/.codex/config.toml"
   [ -f "${CURRENT_HOME}/.claude.json" ] && sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" "${CURRENT_HOME}/.claude.json"

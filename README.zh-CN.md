@@ -18,7 +18,7 @@
 - 手动重新配置 **sing-box** 代理核心、轮换脚本与系统级定时器；
 - 手动重新登录所有的 **AI 命令行工具**（Claude Code、OpenAI Codex、Antigravity `agy`、xAI Grok）；
 - **邮件与定时自动化服务** 因缺少 GPG 密钥、`pass` 密码库或用户 systemd 定时器而无法工作；
-- 新老电脑用户名不同（如从 `xiaowei` 变成 `luneth90`）时，因配置中残留的绝对路径报错。
+- 新老电脑用户名不同（如从 `alice` 变成 `bob`）时，因配置中残留的绝对路径报错。
 
 **OmaMigrate** 专为彻底解决上述痛点而生，提供一套工业级的**全系统生态一键迁移引擎**：
 
@@ -65,7 +65,7 @@
 - 新电脑还原后直接处于已登录状态，开箱即用。
 
 ### 5. 跨用户名绝对路径智能自适应
-- 如果老机器用户名是 `xiaowei`，新机器用户名是 `luneth90`，还原引擎会自动检测并批量将配置文件（`.codex`, `.claude.json`, `antigravity-cli`, `git/config`）中的硬编码旧路径动态替换为新主机的 `$HOME`。
+- 如果老机器用户名是 `alice`，新机器用户名是 `bob`，还原引擎会自动检测并批量将配置文件（`.codex`, `.claude.json`, `antigravity-cli`, `git/config`）中的硬编码旧路径动态替换为新主机的 `$HOME`。
 
 ### 6. 完全幂等、高容错的还原引擎
 - **拦截 root 误触**：开头严格检测并拒绝以 `sudo` 运行，防止把家目录文件所有权污染为 `root:root`。
@@ -131,7 +131,7 @@ cd ~/omarchy-restore && ./restore.sh
 
 1. **软链接至 Omarchy 插件库**：
    ```bash
-   ln -s ~/Projects/omamigrate ~/.config/omarchy/plugins/luneth90.omamigrate
+   ln -s ~/Projects/omamigrate ~/.config/omarchy/plugins/omamigrate
    omarchy-shell shell rescanPlugins
    ```
 2. **软链接命令行至全局 PATH**：
@@ -140,7 +140,7 @@ cd ~/omarchy-restore && ./restore.sh
    ```
 3. **绑定桌面全局快捷键**（编辑 `~/.config/hypr/bindings.lua`）：
    ```lua
-   o.bind("SUPER + SHIFT + M", "OmaMigrate", "omarchy-shell shell summon luneth90.omamigrate '{}'")
+   o.bind("SUPER + SHIFT + M", "OmaMigrate", "omarchy-shell shell summon omamigrate '{}'")
    ```
 
 ---
@@ -157,4 +157,4 @@ cd ~/omarchy-restore && ./restore.sh
 
 ## 开源协议
 
-基于 MIT License 开源 © 2026 [luneth90](https://github.com/luneth90)
+基于 MIT License 开源 © 2026 OmaMigrate 项目组

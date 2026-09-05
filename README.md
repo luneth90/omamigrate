@@ -64,7 +64,7 @@ Traditional dotfiles sync tools (such as Git-based UI sync widgets) only copy ba
 - All CLI tools remain in an authenticated state on the new machine—no QR codes, no browser log-ins.
 
 ### 5. Smart Username & Path Adaptation
-- If your old username was `xiaowei` and your new machine username is `luneth90`, OmaMigrate's restoration engine automatically sanitizes and rewrites hardcoded paths across configuration files (`.codex`, `.claude.json`, `antigravity-cli`, `git/config`).
+- If your old username was `alice` and your new machine username is `bob`, OmaMigrate's restoration engine automatically sanitizes and rewrites hardcoded paths across configuration files (`.codex`, `.claude.json`, `antigravity-cli`, `git/config`).
 
 ### 6. Fully Idempotent & Fault-Tolerant Restoration
 - **Anti-Root Guard**: Prevents running the restore script with `sudo` to protect file ownership.
@@ -143,7 +143,7 @@ To integrate OmaMigrate directly into your Omarchy desktop:
 
 1. Clone or symlink the project to your plugins directory:
    ```bash
-   ln -s ~/Projects/omamigrate ~/.config/omarchy/plugins/luneth90.omamigrate
+   ln -s ~/Projects/omamigrate ~/.config/omarchy/plugins/omamigrate
    omarchy-shell shell rescanPlugins
    ```
 2. Symlink the CLI to your path:
@@ -152,7 +152,7 @@ To integrate OmaMigrate directly into your Omarchy desktop:
    ```
 3. (Optional) Bind a shortcut in `~/.config/hypr/bindings.lua`:
    ```lua
-   o.bind("SUPER + SHIFT + M", "OmaMigrate", "omarchy-shell shell summon luneth90.omamigrate '{}'")
+   o.bind("SUPER + SHIFT + M", "OmaMigrate", "omarchy-shell shell summon omamigrate '{}'")
    ```
 
 ---
@@ -169,4 +169,4 @@ A built-in test suite validates script syntax and executable integrity:
 
 ## License
 
-MIT License © 2026 [luneth90](https://github.com/luneth90)
+MIT License © 2026 OmaMigrate Project

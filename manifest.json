@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "id": "luneth90.omamigrate",
+  "id": "omamigrate",
   "name": "OmaMigrate",
   "version": "1.0.0",
-  "author": "luneth90",
+  "author": "OmaMigrate",
   "license": "MIT",
   "description": "One-click whole-system ecosystem & environment migration tool for Omarchy Linux — transfer apps, configs, services, and AI credentials seamlessly.",
   "kinds": [
