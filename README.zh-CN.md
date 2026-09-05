@@ -116,7 +116,7 @@ omarchy plugin remove omamigrate   # 一键卸载
 编辑 `~/.config/hypr/bindings.lua`，添加一行无冲突快捷键绑定（推荐 `SUPER + CTRL + M`，与 Omarchy 系统默认键位完美契合）：
 
 ```lua
-o.bind("SUPER + CTRL + M", "OmaMigrate", "omarchy-shell shell summon omamigrate '{}'")
+o.bind("SUPER + CTRL + M", "OmaMigrate", "omarchy-shell shell toggle omamigrate")
 ```
 
 ---

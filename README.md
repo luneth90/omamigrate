@@ -129,7 +129,7 @@ omarchy plugin remove omamigrate   # Uninstall plugin
 Add a keybinding in `~/.config/hypr/bindings.lua` to summon the OmaMigrate HUD anywhere (recommended: `SUPER + CTRL + M`, perfectly non-conflicting with Omarchy default keys):
 
 ```lua
-o.bind("SUPER + CTRL + M", "OmaMigrate", "omarchy-shell shell summon omamigrate '{}'")
+o.bind("SUPER + CTRL + M", "OmaMigrate", "omarchy-shell shell toggle omamigrate")
 ```
 
 ---
