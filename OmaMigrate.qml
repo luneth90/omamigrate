@@ -131,7 +131,7 @@ Scope {
 
   Process {
     id: exportProcess
-    command: ["xdg-terminal-exec", "bash", "-c", "omamigrate export; echo; read -p 'Press Enter to finish...'"]
+    command: ["xdg-terminal-exec", "bash", "-c", "export PATH=\"$HOME/.config/omarchy/plugins/omamigrate/bin:$HOME/.local/bin:$PATH\"; omamigrate export; echo; read -p 'Press Enter to finish...'"]
     onExited: function(code) {
       root.isProcessing = false
       if (code === 0) {
@@ -144,7 +144,7 @@ Scope {
 
   Process {
     id: sendProcess
-    command: ["omamigrate", "send"]
+    command: ["bash", "-c", "export PATH=\"$HOME/.config/omarchy/plugins/omamigrate/bin:$HOME/.local/bin:$PATH\"; omamigrate send"]
     onExited: function() {
       root.statusText = "LocalSend launched."
     }
@@ -152,7 +152,7 @@ Scope {
 
   Process {
     id: restoreProcess
-    command: ["xdg-terminal-exec", "bash", "-c", "omamigrate restore ~/Downloads/omarchy-migration.tar.gz; echo; read -p 'Press Enter to finish...'"]
+    command: ["xdg-terminal-exec", "bash", "-c", "export PATH=\"$HOME/.config/omarchy/plugins/omamigrate/bin:$HOME/.local/bin:$PATH\"; omamigrate restore ~/Downloads/omarchy-migration.tar.gz; echo; read -p 'Press Enter to finish...'"]
     onExited: function(code) {
       root.isProcessing = false
       if (code === 0) {

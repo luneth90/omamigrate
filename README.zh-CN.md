@@ -147,21 +147,39 @@ cd ~/omarchy-restore && ./restore.sh
 
 ## Omarchy 桌面插件集成
 
-将 OmaMigrate 接入您的 Omarchy 桌面环境：
+### 方式一：Omarchy 官方命令一键安装（推荐）
 
-1. **软链接至 Omarchy 插件库**：
-   ```bash
-   ln -s ~/Projects/omamigrate ~/.config/omarchy/plugins/omamigrate
-   omarchy-shell shell rescanPlugins
-   ```
-2. **软链接命令行至全局 PATH**：
-   ```bash
-   ln -s ~/Projects/omamigrate/bin/omamigrate ~/.local/bin/omamigrate
-   ```
-3. **绑定桌面全局快捷键**（编辑 `~/.config/hypr/bindings.lua`）：
-   ```lua
-   o.bind("SUPER + SHIFT + M", "OmaMigrate", "omarchy-shell shell summon omamigrate '{}'")
-   ```
+通过 Omarchy 官方的插件管理系统直接从 Git 仓库安装并启用：
+
+```bash
+# 1. 官方指令自动克隆、校验并启用插件
+omarchy plugin add https://github.com/<your-username>/omamigrate.git --enable
+
+# 2. 软链接命令行工具至全局 PATH（可选，GUI 界面中内置直调）
+ln -s ~/.config/omarchy/plugins/omamigrate/bin/omamigrate ~/.local/bin/omamigrate
+```
+
+*若后续需要更新或卸载，可使用官方指令：*
+```bash
+omarchy plugin update omamigrate   # 一键拉取更新
+omarchy plugin remove omamigrate   # 一键卸载
+```
+
+### 方式二：本地克隆与开发安装
+
+```bash
+ln -s ~/Projects/omamigrate ~/.config/omarchy/plugins/omamigrate
+ln -s ~/Projects/omamigrate/bin/omamigrate ~/.local/bin/omamigrate
+omarchy-shell shell rescanPlugins
+```
+
+### 绑定桌面召唤快捷键
+
+在 `~/.config/hypr/bindings.lua` 中添加全局按键绑定，随时唤出可视化弹窗：
+
+```lua
+o.bind("SUPER + SHIFT + M", "OmaMigrate", "omarchy-shell shell summon omamigrate '{}'")
+```
 
 ---
 
