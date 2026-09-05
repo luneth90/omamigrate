@@ -67,14 +67,16 @@
   - 自动保留 `~/.local/bin/` 里的邮件管理/分类/清理脚本（例如基于 `agy` 或各类模型的自动化工具）。
   - 自动注册并激活对应的 `systemd --user` 每日定时器。
 
-### 4. AI 模型工具免扫码登录 (Zero-Login)
-- 完整打包主流 AI 开发工具的登录 Session 与授权 Token：
-  - **Claude Code** (`~/.claude.json`, `~/.claude/`)
+### 4. AI 模型工具与系统 Keyring 免扫码登录 (Zero-Login)
+- **Linux 桌面 Secret Service 密钥库完整同步**：
+  - 自动备份与还原 **Linux 系统 Keyring** (`~/.local/share/keyrings/`)，完整包含 **Google Antigravity (`agy`)**、**VS Code**、**GitHub CLI** 与 Chrome 等应用在 Secret Service 中托管的 OAuth Token 与机密。
+- **主流 AI 开发工具登录态与 Session 全量迁移**：
+  - **Google Antigravity (`agy`)** (`~/.gemini/antigravity-cli/` 及系统 Keyring)
   - **OpenAI Codex** (`~/.codex/auth.json`, `~/.codex/config.toml`)
-  - **Google Antigravity (`agy`)** (`~/.gemini/antigravity-cli/`)
+  - **Claude Code** (`~/.claude.json`, `~/.claude/`)
   - **xAI Grok** (`~/.grok/auth.json`)
   - **GitHub CLI (`gh`)** (`~/.config/gh/hosts.yml`)
-- 新电脑还原后直接处于已登录状态，开箱即用。
+- 新电脑还原后直接继承登录态，开箱即用（新老电脑使用相同系统登录密码时，PAM 自动免密解锁 Keyring）。
 
 ### 5. 跨用户名绝对路径智能自适应
 - 如果老机器用户名是 `alice`，新机器用户名是 `bob`，还原引擎会自动检测并批量将配置文件（`.codex`, `.claude.json`, `antigravity-cli`, `git/config`）中的硬编码旧路径动态替换为新主机的 `$HOME`。

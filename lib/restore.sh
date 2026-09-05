@@ -78,6 +78,7 @@ sudo chown -R "${CURRENT_USER}:${CURRENT_USER}" \
 [ -d "${CURRENT_HOME}/.gnupg" ] && chmod 700 "${CURRENT_HOME}/.gnupg" && find "${CURRENT_HOME}/.gnupg" -type f -exec chmod 600 {} + 2>/dev/null || true
 [ -d "${CURRENT_HOME}/.password-store" ] && chmod 700 "${CURRENT_HOME}/.password-store"
 [ -d "${CURRENT_HOME}/.local/bin" ] && chmod +x "${CURRENT_HOME}/.local/bin"/* 2>/dev/null || true
+[ -d "${CURRENT_HOME}/.local/share/keyrings" ] && chmod 700 "${CURRENT_HOME}/.local/share/keyrings" && chmod -f 600 "${CURRENT_HOME}/.local/share/keyrings"/* 2>/dev/null || true
 
 # 6. Restore system-level configs (sing-box, mihomo, v2raya, xray, v2ray, daed, proxychains)
 echo "==> 4. Restoring system-level configurations..."

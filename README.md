@@ -66,14 +66,16 @@ Whether you prefer background daemons or modern GUI desktop clients, OmaMigrate 
 - **Automation Scripts & Background Timers**:
   - Preserves custom mail management, triage, or automated notification scripts under `~/.local/bin/` and their associated `systemd --user` timers.
 
-### 4. Zero-Login AI State Persistence
-- Migrates active sessions and OAuth tokens for:
-  - **Claude Code** (`~/.claude.json`, `~/.claude/`)
+### 4. Zero-Login AI State & System Keyring Persistence
+- **Linux Secret Service & Keyring Sync**:
+  - Automatically migrates **Linux System Keyrings** (`~/.local/share/keyrings/`), preserving encrypted credentials and OAuth tokens stored by **Antigravity CLI (`agy`)**, **VS Code**, **GitHub CLI**, and Chromium.
+- **Active AI Developer Tool Sessions**:
+  - **Antigravity CLI (`agy`)** (`~/.gemini/antigravity-cli/` & Secret Service Keyring)
   - **OpenAI Codex** (`~/.codex/auth.json`, `~/.codex/config.toml`)
-  - **Antigravity CLI (`agy`)** (`~/.gemini/antigravity-cli/`)
+  - **Claude Code** (`~/.claude.json`, `~/.claude/`)
   - **xAI Grok** (`~/.grok/auth.json`)
   - **GitHub CLI (`gh`)** (`~/.config/gh/hosts.yml`)
-- All CLI tools remain in an authenticated state on the new machine—no QR codes, no browser log-ins.
+- All CLI tools remain in an authenticated state on the new machine—no QR codes or browser re-logins required (unlocked automatically when user login passwords match).
 
 ### 5. Smart Username & Path Adaptation
 - If your old username was `alice` and your new machine username is `bob`, OmaMigrate's restoration engine automatically sanitizes and rewrites hardcoded paths across configuration files (`.codex`, `.claude.json`, `antigravity-cli`, `git/config`).

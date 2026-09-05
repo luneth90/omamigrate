@@ -47,6 +47,13 @@ if [ -d "$HOME/.local/bin" ]; then
   cp -rp "$HOME/.local/bin"/* "${BACKUP_DIR}/user_home/.local/bin/" 2>/dev/null || true
 fi
 
+# Linux desktop Secret Service / Keyrings (agy, VS Code, Git, Chrome credentials)
+if [ -d "$HOME/.local/share/keyrings" ]; then
+  msg_step "Including desktop keyrings: ~/.local/share/keyrings"
+  mkdir -p "${BACKUP_DIR}/user_home/.local/share"
+  cp -rp "$HOME/.local/share/keyrings" "${BACKUP_DIR}/user_home/.local/share/"
+fi
+
 # User application configs
 mkdir -p "${BACKUP_DIR}/user_home/.config"
 for item in "${CONFIG_TARGETS[@]}"; do
