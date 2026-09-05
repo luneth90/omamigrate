@@ -1,0 +1,21 @@
+# Archives & Bundles
+*.tar.gz
+*.tar.zst
+*.omarchy
+*.tmp*
+
+# Python & Node
+__pycache__/
+*.py[cod]
+*$py.class
+node_modules/
+
+# OS / Editor
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.bak*
+
+# Local state
+.sync-session
