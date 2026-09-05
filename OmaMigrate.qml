@@ -129,9 +129,11 @@ Scope {
     }
   }
 
+  readonly property string cliPath: String(Qt.resolvedUrl("bin/omamigrate")).replace("file://", "")
+
   Process {
     id: exportProcess
-    command: ["xdg-terminal-exec", "bash", "-c", "export PATH=\"$HOME/.config/omarchy/plugins/omamigrate/bin:$HOME/.local/bin:$PATH\"; omamigrate export; echo; read -p 'Press Enter to finish...'"]
+    command: ["xdg-terminal-exec", "bash", "-c", "\"" + root.cliPath + "\" export; echo; read -p 'Press Enter to finish...'"]
     onExited: function(code) {
       root.isProcessing = false
       if (code === 0) {
@@ -144,7 +146,7 @@ Scope {
 
   Process {
     id: sendProcess
-    command: ["bash", "-c", "export PATH=\"$HOME/.config/omarchy/plugins/omamigrate/bin:$HOME/.local/bin:$PATH\"; omamigrate send"]
+    command: ["bash", "-c", "\"" + root.cliPath + "\" send"]
     onExited: function() {
       root.statusText = "LocalSend launched."
     }
@@ -152,7 +154,7 @@ Scope {
 
   Process {
     id: restoreProcess
-    command: ["xdg-terminal-exec", "bash", "-c", "export PATH=\"$HOME/.config/omarchy/plugins/omamigrate/bin:$HOME/.local/bin:$PATH\"; omamigrate restore ~/Downloads/omarchy-migration.tar.gz; echo; read -p 'Press Enter to finish...'"]
+    command: ["xdg-terminal-exec", "bash", "-c", "\"" + root.cliPath + "\" restore ~/Downloads/omarchy-migration.tar.gz; echo; read -p 'Press Enter to finish...'"]
     onExited: function(code) {
       root.isProcessing = false
       if (code === 0) {

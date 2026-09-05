@@ -159,30 +159,18 @@ The restore engine will automatically install missing packages, restore configs,
 
 ## Omarchy Plugin Integration
 
-### Method 1: Official One-Line Install (Recommended)
+### Official One-Command Install (Recommended)
 
-Install and enable OmaMigrate directly using Omarchy's official plugin manager:
+Install and enable OmaMigrate directly using Omarchy's official plugin manager—just one command:
 
 ```bash
-# 1. Add and enable via Omarchy official CLI
 omarchy plugin add https://github.com/<your-username>/omamigrate.git --enable
-
-# 2. (Optional) Symlink CLI binary to your path
-ln -s ~/.config/omarchy/plugins/omamigrate/bin/omamigrate ~/.local/bin/omamigrate
 ```
 
-*To update or uninstall later via official commands:*
+*Lifecycle management commands:*
 ```bash
 omarchy plugin update omamigrate   # Update to latest version
 omarchy plugin remove omamigrate   # Uninstall plugin
-```
-
-### Method 2: Local Git Clone & Development Symlink
-
-```bash
-ln -s ~/Projects/omamigrate ~/.config/omarchy/plugins/omamigrate
-ln -s ~/Projects/omamigrate/bin/omamigrate ~/.local/bin/omamigrate
-omarchy-shell shell rescanPlugins
 ```
 
 ### Desktop Global Shortcut Binding
@@ -192,6 +180,8 @@ Add a keybinding in `~/.config/hypr/bindings.lua` to toggle the OmaMigrate HUD a
 ```lua
 o.bind("SUPER + SHIFT + M", "OmaMigrate", "omarchy-shell shell summon omamigrate '{}'")
 ```
+
+> **💡 Terminal CLI Note**: The plugin HUD dynamically resolves its own internal script path, so button clicks work immediately without modifying PATH. If you wish to run `omamigrate` directly from your shell terminal, you can optionally symlink it: `ln -s ~/.config/omarchy/plugins/omamigrate/bin/omamigrate ~/.local/bin/omamigrate`.
 
 ---
 
