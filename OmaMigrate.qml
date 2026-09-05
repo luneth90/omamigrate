@@ -80,8 +80,8 @@ Item {
     // Modal Card
     Rectangle {
       id: card
-      width: 460
-      height: 330
+      width: 480
+      height: 350
       radius: 14
       color: "#1e1e2e"
       border.color: "#313244"
@@ -108,8 +108,8 @@ Item {
 
       ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 22
-        spacing: 14
+        anchors.margins: 20
+        spacing: 12
 
         // Top Row: Title + Close Button
         RowLayout {
@@ -151,7 +151,7 @@ Item {
         // Mode Switcher (Export / Restore)
         Rectangle {
           Layout.fillWidth: true
-          height: 36
+          height: 34
           radius: 8
           color: "#181825"
           border.color: "#313244"
@@ -172,7 +172,7 @@ Item {
               Text {
                 anchors.centerIn: parent
                 text: "📦 Export"
-                font.pixelSize: 13
+                font.pixelSize: 12
                 font.bold: root.currentMode === "export"
                 color: root.currentMode === "export" ? "#cdd6f4" : "#6c7086"
               }
@@ -182,6 +182,7 @@ Item {
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
+                  if (root.isProcessing) return
                   root.currentMode = "export"
                   root.checkArchive()
                 }
@@ -198,7 +199,7 @@ Item {
               Text {
                 anchors.centerIn: parent
                 text: "⚡ Restore"
-                font.pixelSize: 13
+                font.pixelSize: 12
                 font.bold: root.currentMode === "restore"
                 color: root.currentMode === "restore" ? "#cdd6f4" : "#6c7086"
               }
@@ -208,6 +209,7 @@ Item {
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
+                  if (root.isProcessing) return
                   root.currentMode = "restore"
                   root.checkArchive()
                 }
@@ -228,13 +230,13 @@ Item {
           visible: root.currentMode === "export"
           Layout.fillWidth: true
           Layout.fillHeight: true
-          spacing: 12
+          spacing: 10
 
           // Step 1: Export
           ColumnLayout {
             visible: root.exportStep === 1
             Layout.fillWidth: true
-            spacing: 12
+            spacing: 10
 
             RowLayout {
               Text {
@@ -254,27 +256,27 @@ Item {
             }
 
             Text {
-              text: "Includes installed apps, daemons, dotfiles, and AI credentials."
+              text: "Includes apps, system services, configs, and AI developer credentials."
               font.pixelSize: 12
               color: "#a6adc8"
               wrapMode: Text.WordWrap
               Layout.fillWidth: true
             }
 
-            Item { height: 4 }
+            Item { height: 2 }
 
             Rectangle {
               Layout.fillWidth: true
-              height: 42
+              height: 40
               radius: 8
               color: root.isProcessing ? "#313244" : (exportBtnMouse.pressed ? "#74c7ec" : exportBtnMouse.containsMouse ? "#b4befe" : "#89b4fa")
 
               Text {
                 anchors.centerIn: parent
-                text: root.isProcessing ? "Exporting in terminal..." : "📦 Create Backup"
+                text: root.isProcessing ? "Archiving in background..." : "📦 Create Backup"
                 font.pixelSize: 13
                 font.bold: true
-                color: root.isProcessing ? "#6c7086" : "#11111b"
+                color: root.isProcessing ? "#a6adc8" : "#11111b"
               }
 
               MouseArea {
@@ -285,7 +287,7 @@ Item {
                 onClicked: {
                   if (root.isProcessing) return
                   root.isProcessing = true
-                  root.statusText = "Exporting..."
+                  root.statusText = "Starting export..."
                   exportProcess.running = true
                 }
               }
@@ -296,7 +298,7 @@ Item {
           ColumnLayout {
             visible: root.exportStep === 2
             Layout.fillWidth: true
-            spacing: 12
+            spacing: 10
 
             RowLayout {
               Text {
@@ -334,11 +336,11 @@ Item {
               Layout.fillWidth: true
             }
 
-            Item { height: 4 }
+            Item { height: 2 }
 
             Rectangle {
               Layout.fillWidth: true
-              height: 42
+              height: 40
               radius: 8
               color: sendBtnMouse.pressed ? "#94e2d5" : sendBtnMouse.containsMouse ? "#b4befe" : "#a6e3a1"
 
@@ -367,7 +369,7 @@ Item {
           ColumnLayout {
             visible: root.exportStep === 3
             Layout.fillWidth: true
-            spacing: 12
+            spacing: 10
 
             Text {
               text: "✓ LocalSend Launched"
@@ -384,7 +386,7 @@ Item {
               Layout.fillWidth: true
             }
 
-            Item { height: 8 }
+            Item { height: 4 }
 
             RowLayout {
               Layout.fillWidth: true
@@ -446,13 +448,13 @@ Item {
           visible: root.currentMode === "restore"
           Layout.fillWidth: true
           Layout.fillHeight: true
-          spacing: 12
+          spacing: 10
 
           // Step 1: Restore
           ColumnLayout {
             visible: root.restoreStep === 1
             Layout.fillWidth: true
-            spacing: 12
+            spacing: 10
 
             RowLayout {
               Text {
@@ -474,7 +476,7 @@ Item {
             // Archive detection badge
             Rectangle {
               Layout.fillWidth: true
-              height: 34
+              height: 32
               radius: 6
               color: root.archiveDetected ? "#1c2e26" : "#2a221d"
               border.color: root.archiveDetected ? "#2d4f3e" : "#4f3b2a"
@@ -501,16 +503,16 @@ Item {
 
             Rectangle {
               Layout.fillWidth: true
-              height: 42
+              height: 40
               radius: 8
               color: root.isProcessing ? "#313244" : (restoreBtnMouse.pressed ? "#b4befe" : restoreBtnMouse.containsMouse ? "#cba6f7" : "#cba6f7")
 
               Text {
                 anchors.centerIn: parent
-                text: root.isProcessing ? "Restoring in terminal..." : "⚡ Start Restore"
+                text: root.isProcessing ? "Restoring in background..." : "⚡ Start Restore"
                 font.pixelSize: 13
                 font.bold: true
-                color: root.isProcessing ? "#6c7086" : "#11111b"
+                color: root.isProcessing ? "#a6adc8" : "#11111b"
               }
 
               MouseArea {
@@ -521,7 +523,7 @@ Item {
                 onClicked: {
                   if (root.isProcessing) return
                   root.isProcessing = true
-                  root.statusText = "Restoring..."
+                  root.statusText = "Starting restoration..."
                   restoreProcess.running = true
                 }
               }
@@ -532,7 +534,7 @@ Item {
           ColumnLayout {
             visible: root.restoreStep === 2
             Layout.fillWidth: true
-            spacing: 12
+            spacing: 10
 
             Text {
               text: "✓ System Restored Successfully!"
@@ -549,7 +551,7 @@ Item {
               Layout.fillWidth: true
             }
 
-            Item { height: 8 }
+            Item { height: 4 }
 
             RowLayout {
               Layout.fillWidth: true
@@ -606,6 +608,38 @@ Item {
 
           Item { Layout.fillHeight: true }
         }
+
+        // Live Status Pill (Real-time output streaming from process)
+        Rectangle {
+          Layout.fillWidth: true
+          height: 28
+          radius: 6
+          color: "#181825"
+          border.color: root.isProcessing ? "#89b4fa" : "#313244"
+          border.width: 1
+
+          RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 10
+            anchors.rightMargin: 10
+            spacing: 8
+
+            Rectangle {
+              width: 6
+              height: 6
+              radius: 3
+              color: root.isProcessing ? "#89b4fa" : (root.statusText.indexOf("✓") !== -1 ? "#a6e3a1" : "#6c7086")
+            }
+
+            Text {
+              Layout.fillWidth: true
+              text: root.statusText
+              font.pixelSize: 11
+              color: root.isProcessing ? "#cdd6f4" : "#a6adc8"
+              elide: Text.ElideRight
+            }
+          }
+        }
       }
     }
   }
@@ -625,29 +659,31 @@ Item {
 
   Process {
     id: exportProcess
-    command: [
-      "xdg-terminal-exec", "bash", "-c",
-      "\"" + root.cliPath + "\" export; code=$?; echo $code > /tmp/.omamigrate_export_status; echo; read -p 'Press Enter to finish...'"
-    ]
-    onExited: function() {
-      root.isProcessing = false
-      checkExportStatusProcess.running = true
-    }
-  }
-
-  Process {
-    id: checkExportStatusProcess
-    command: ["bash", "-c", "if [ -f /tmp/.omamigrate_export_status ] && [ \"$(cat /tmp/.omamigrate_export_status)\" = \"0\" ] && [ -f \"$HOME/omarchy-migration.tar.gz\" ]; then echo 'ok'; else echo 'fail'; fi"]
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: function(text) {
-        if (String(text).trim() === "ok") {
-          root.exportStep = 2
-          root.statusText = "Backup ready."
-          root.checkArchive()
-        } else {
-          root.statusText = "Export cancelled or failed."
+    command: ["bash", "-c", "\"" + root.cliPath + "\" export"]
+    stdout: SplitParser {
+      onRead: function(line) {
+        var clean = String(line).replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "").trim()
+        if (clean.length > 0) {
+          root.statusText = clean
         }
+      }
+    }
+    stderr: SplitParser {
+      onRead: function(line) {
+        var clean = String(line).replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "").trim()
+        if (clean.length > 0) {
+          root.statusText = clean
+        }
+      }
+    }
+    onExited: function(code) {
+      root.isProcessing = false
+      if (code === 0) {
+        root.exportStep = 2
+        root.statusText = "Backup ready: ~/omarchy-migration.tar.gz"
+        root.checkArchive()
+      } else {
+        root.statusText = "Export cancelled or failed."
       }
     }
   }
@@ -664,27 +700,32 @@ Item {
   Process {
     id: restoreProcess
     command: [
-      "xdg-terminal-exec", "bash", "-c",
-      "ARCHIVE=\"$([ -f $HOME/Downloads/omarchy-migration.tar.gz ] && echo $HOME/Downloads/omarchy-migration.tar.gz || echo $HOME/omarchy-migration.tar.gz)\"; \"" + root.cliPath + "\" restore \"$ARCHIVE\"; code=$?; echo $code > /tmp/.omamigrate_restore_status; echo; read -p 'Press Enter to finish...'"
+      "bash", "-c",
+      "ARCHIVE=\"$([ -f $HOME/Downloads/omarchy-migration.tar.gz ] && echo $HOME/Downloads/omarchy-migration.tar.gz || echo $HOME/omarchy-migration.tar.gz)\"; \"" + root.cliPath + "\" restore \"$ARCHIVE\""
     ]
-    onExited: function() {
-      root.isProcessing = false
-      checkRestoreStatusProcess.running = true
-    }
-  }
-
-  Process {
-    id: checkRestoreStatusProcess
-    command: ["bash", "-c", "if [ -f /tmp/.omamigrate_restore_status ] && [ \"$(cat /tmp/.omamigrate_restore_status)\" = \"0\" ]; then echo 'ok'; else echo 'fail'; fi"]
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: function(text) {
-        if (String(text).trim() === "ok") {
-          root.restoreStep = 2
-          root.statusText = "Restore completed successfully."
-        } else {
-          root.statusText = "Restore cancelled or failed."
+    stdout: SplitParser {
+      onRead: function(line) {
+        var clean = String(line).replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "").trim()
+        if (clean.length > 0) {
+          root.statusText = clean
         }
+      }
+    }
+    stderr: SplitParser {
+      onRead: function(line) {
+        var clean = String(line).replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "").trim()
+        if (clean.length > 0) {
+          root.statusText = clean
+        }
+      }
+    }
+    onExited: function(code) {
+      root.isProcessing = false
+      if (code === 0) {
+        root.restoreStep = 2
+        root.statusText = "Restoration completed successfully!"
+      } else {
+        root.statusText = "Restore finished or cancelled."
       }
     }
   }

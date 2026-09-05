@@ -82,37 +82,80 @@ if [ -d "$HOME/.thunderbird" ]; then
 fi
 
 # 3. System-level Services & Proxy Configuration
-msg_info "Collecting system-level proxy configurations & services (requires sudo access)..."
+msg_info "Collecting system-level proxy configurations & services..."
 
-# Proxy directories in /etc
+mkdir -p "${BACKUP_DIR}/system_root"
+
+unreadable_paths=()
+readable_paths=()
+
 for pdir in "${PROXY_SYSTEM_DIRS[@]}"; do
   if [ -d "$pdir" ]; then
-    msg_step "Backing up system proxy directory: ${pdir}"
-    sudo mkdir -p "${BACKUP_DIR}/system_root${pdir}"
-    sudo cp -rp "${pdir}/." "${BACKUP_DIR}/system_root${pdir}/" 2>/dev/null || true
+    if find "$pdir" ! -readable -print -quit 2>/dev/null | grep -q .; then
+      unreadable_paths+=("$pdir")
+    else
+      readable_paths+=("$pdir")
+    fi
   fi
 done
 
-# Proxy individual files (e.g. /etc/proxychains.conf, /usr/local/bin/sing-box-node-rotate)
 for pfile in "${PROXY_SYSTEM_FILES[@]}"; do
   if [ -f "$pfile" ]; then
-    msg_step "Backing up system proxy file: ${pfile}"
-    sudo mkdir -p "${BACKUP_DIR}/system_root$(dirname "$pfile")"
-    sudo cp -p "$pfile" "${BACKUP_DIR}/system_root${pfile}" 2>/dev/null || true
+    if [ -r "$pfile" ]; then
+      readable_paths+=("$pfile")
+    else
+      unreadable_paths+=("$pfile")
+    fi
   fi
 done
 
-# Systemd units for proxies & services
-sudo mkdir -p "${BACKUP_DIR}/system_root/etc/systemd/system"
 for s in "${PROXY_SYSTEM_SERVICES[@]}"; do
-  if [ -f "/etc/systemd/system/$s" ]; then
-    msg_step "Backing up systemd unit: ${s}"
-    sudo cp -p "/etc/systemd/system/$s" "${BACKUP_DIR}/system_root/etc/systemd/system/"
+  sfile="/etc/systemd/system/$s"
+  if [ -f "$sfile" ]; then
+    if [ -r "$sfile" ]; then
+      readable_paths+=("$sfile")
+    else
+      unreadable_paths+=("$sfile")
+    fi
   fi
 done
 
-# Reclaim permissions on staging dir
-sudo chown -R "$(id -un):$(id -gn)" "${BACKUP_DIR}"
+# Copy readable system files directly as user (NO ROOT, NO PASSWORD!)
+for path in "${readable_paths[@]}"; do
+  msg_step "Backing up system config: ${path}"
+  if [ -d "$path" ]; then
+    mkdir -p "${BACKUP_DIR}/system_root${path}"
+    cp -rp "${path}/." "${BACKUP_DIR}/system_root${path}/" 2>/dev/null || true
+  elif [ -f "$path" ]; then
+    mkdir -p "${BACKUP_DIR}/system_root$(dirname "$path")"
+    cp -p "$path" "${BACKUP_DIR}/system_root${path}" 2>/dev/null || true
+  fi
+done
+
+# If any protected system paths require elevation, do it ONCE via Polkit (pkexec) or sudo
+if [ "${#unreadable_paths[@]}" -gt 0 ]; then
+  msg_info "Protected system paths detected: ${unreadable_paths[*]}"
+  
+  tar_args=()
+  for p in "${unreadable_paths[@]}"; do
+    tar_args+=("${p#/}")
+  done
+
+  if [ -t 0 ]; then
+    ELEVATOR="sudo"
+  elif command -v pkexec >/dev/null 2>&1; then
+    ELEVATOR="pkexec"
+  else
+    ELEVATOR="sudo"
+  fi
+
+  msg_step "Requesting elevation (${ELEVATOR}) to archive protected configs..."
+  if $ELEVATOR tar -C / -cf - "${tar_args[@]}" 2>/dev/null | tar -C "${BACKUP_DIR}/system_root" -xf - 2>/dev/null; then
+    msg_ok "Protected configs archived."
+  else
+    msg_warn "Could not archive protected configs (authentication cancelled or failed)."
+  fi
+fi
 
 # 4. Embed the automated restore script
 msg_info "Embedding restore engine..."

@@ -20,6 +20,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CURRENT_USER="$(id -un)"
 CURRENT_HOME="$HOME"
 
+# Define privilege elevator
+if [ -t 0 ]; then
+  ELEVATOR="sudo"
+elif command -v pkexec >/dev/null 2>&1; then
+  ELEVATOR="pkexec"
+else
+  ELEVATOR="sudo"
+fi
+
 echo "=========================================================="
 echo " OmaMigrate: Restoring Omarchy Ecosystem..."
 echo " Target User: ${CURRENT_USER} (Home: ${CURRENT_HOME})"
@@ -28,7 +37,7 @@ echo "=========================================================="
 # 2. Automatically clear pacman database locks from interrupted operations
 if [ -f /var/lib/pacman/db.lck ]; then
   echo "==> [Clean] Detected lingering pacman lock file, clearing..."
-  sudo rm -f /var/lib/pacman/db.lck || true
+  $ELEVATOR rm -f /var/lib/pacman/db.lck || true
 fi
 
 # 3. Restore user configuration files
@@ -62,7 +71,7 @@ fi
 
 # 5. Fix permissions for security and credentials
 echo "==> 3. Setting secure permissions for credentials..."
-sudo chown -R "${CURRENT_USER}:${CURRENT_USER}" \
+chmod -R u+rwX \
   "${CURRENT_HOME}/.config" \
   "${CURRENT_HOME}/.local" \
   "${CURRENT_HOME}/.ssh" \
@@ -106,36 +115,15 @@ if [ -d "${CURRENT_HOME}/.local/share/keyrings" ]; then
 fi
 
 # 6. Restore system-level configs (sing-box, mihomo, v2raya, xray, v2ray, daed, proxychains)
-echo "==> 4. Restoring system-level configurations..."
-for etc_dir in sing-box mihomo v2raya xray v2ray daed; do
-  if [ -d "${SCRIPT_DIR}/system_root/etc/${etc_dir}" ]; then
-    echo "    Restoring /etc/${etc_dir}..."
-    sudo mkdir -p "/etc/${etc_dir}"
-    sudo cp -rp "${SCRIPT_DIR}/system_root/etc/${etc_dir}/." "/etc/${etc_dir}/"
-    if [ "${etc_dir}" = "sing-box" ]; then
-      if getent group sing-box >/dev/null 2>&1; then
-        sudo chown -R root:sing-box "/etc/sing-box"
-      else
-        sudo chown -R root:root "/etc/sing-box"
-      fi
-      [ -f "/etc/sing-box/config.json" ] && sudo chmod 640 "/etc/sing-box/config.json"
-    fi
+if [ -d "${SCRIPT_DIR}/system_root" ]; then
+  echo "==> 4. Restoring system-level configurations..."
+  $ELEVATOR cp -rfp "${SCRIPT_DIR}/system_root/." / 2>/dev/null || true
+  if getent group sing-box >/dev/null 2>&1; then
+    $ELEVATOR chown -R root:sing-box "/etc/sing-box" 2>/dev/null || true
+    $ELEVATOR usermod -aG sing-box "$CURRENT_USER" 2>/dev/null || true
+    [ -f "/etc/sing-box/config.json" ] && $ELEVATOR chmod 640 "/etc/sing-box/config.json" 2>/dev/null || true
   fi
-done
-
-if [ -f "${SCRIPT_DIR}/system_root/etc/proxychains.conf" ]; then
-  echo "    Restoring /etc/proxychains.conf..."
-  sudo cp -p "${SCRIPT_DIR}/system_root/etc/proxychains.conf" /etc/proxychains.conf
-fi
-
-if [ -f "${SCRIPT_DIR}/system_root/usr/local/bin/sing-box-node-rotate" ]; then
-  sudo mkdir -p /usr/local/bin
-  sudo cp -p "${SCRIPT_DIR}/system_root/usr/local/bin/sing-box-node-rotate" /usr/local/bin/
-  sudo chmod 755 /usr/local/bin/sing-box-node-rotate
-fi
-
-if [ -d "${SCRIPT_DIR}/system_root/etc/systemd/system" ]; then
-  sudo cp -p "${SCRIPT_DIR}/system_root/etc/systemd/system/"* /etc/systemd/system/ 2>/dev/null || true
+  [ -f "/usr/local/bin/sing-box-node-rotate" ] && $ELEVATOR chmod 755 /usr/local/bin/sing-box-node-rotate 2>/dev/null || true
 fi
 
 # 7. Incremental package installation (arch-native & yay/AUR)
@@ -201,15 +189,15 @@ fi
 
 # 9. Activate and enable services & timers
 echo "==> 7. Activating background timers and services..."
-sudo systemctl daemon-reload
+$ELEVATOR systemctl daemon-reload
 
 # sing-box
 if [ -d "${SCRIPT_DIR}/system_root/etc/sing-box" ] || [ -f "/etc/systemd/system/sing-box.service" ]; then
   if command -v sing-box >/dev/null 2>&1; then
     echo "    Enabling sing-box service & node rotate timer..."
-    sudo systemctl enable --now sing-box.service 2>/dev/null || true
+    $ELEVATOR systemctl enable --now sing-box.service 2>/dev/null || true
     if [ -f "/etc/systemd/system/sing-box-node-rotate.timer" ]; then
-      sudo systemctl enable --now sing-box-node-rotate.timer 2>/dev/null || true
+      $ELEVATOR systemctl enable --now sing-box-node-rotate.timer 2>/dev/null || true
     fi
   fi
 fi
@@ -218,7 +206,7 @@ fi
 if [ -d "${SCRIPT_DIR}/system_root/etc/mihomo" ] || [ -f "/etc/systemd/system/mihomo.service" ]; then
   if command -v mihomo >/dev/null 2>&1; then
     echo "    Enabling mihomo service..."
-    sudo systemctl enable --now mihomo.service 2>/dev/null || true
+    $ELEVATOR systemctl enable --now mihomo.service 2>/dev/null || true
   fi
 fi
 
@@ -226,7 +214,7 @@ fi
 if [ -d "${SCRIPT_DIR}/system_root/etc/v2raya" ] || [ -f "/etc/systemd/system/v2raya.service" ]; then
   if command -v v2raya >/dev/null 2>&1; then
     echo "    Enabling v2raya service..."
-    sudo systemctl enable --now v2raya.service 2>/dev/null || true
+    $ELEVATOR systemctl enable --now v2raya.service 2>/dev/null || true
   fi
 fi
 
@@ -234,13 +222,13 @@ fi
 if [ -d "${SCRIPT_DIR}/system_root/etc/xray" ] || [ -f "/etc/systemd/system/xray.service" ]; then
   if command -v xray >/dev/null 2>&1; then
     echo "    Enabling xray service..."
-    sudo systemctl enable --now xray.service 2>/dev/null || true
+    $ELEVATOR systemctl enable --now xray.service 2>/dev/null || true
   fi
 fi
 if [ -d "${SCRIPT_DIR}/system_root/etc/v2ray" ] || [ -f "/etc/systemd/system/v2ray.service" ]; then
   if command -v v2ray >/dev/null 2>&1; then
     echo "    Enabling v2ray service..."
-    sudo systemctl enable --now v2ray.service 2>/dev/null || true
+    $ELEVATOR systemctl enable --now v2ray.service 2>/dev/null || true
   fi
 fi
 
@@ -248,7 +236,7 @@ fi
 if [ -d "${SCRIPT_DIR}/system_root/etc/daed" ] || [ -f "/etc/systemd/system/daed.service" ]; then
   if command -v daed >/dev/null 2>&1; then
     echo "    Enabling daed service..."
-    sudo systemctl enable --now daed.service 2>/dev/null || true
+    $ELEVATOR systemctl enable --now daed.service 2>/dev/null || true
   fi
 fi
 
