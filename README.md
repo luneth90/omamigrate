@@ -75,7 +75,13 @@ Whether you prefer background daemons or modern GUI desktop clients, OmaMigrate 
   - **Claude Code** (`~/.claude.json`, `~/.claude/`)
   - **xAI Grok** (`~/.grok/auth.json`)
   - **GitHub CLI (`gh`)** (`~/.config/gh/hosts.yml`)
-- All CLI tools remain in an authenticated state on the new machine—no QR codes or browser re-logins required (unlocked automatically when user login passwords match).
+- All CLI tools remain in an authenticated state on the new machine—no QR codes or browser re-logins required.
+
+> [!TIP]
+> **Best Practice Recommendation (Login Password)**:
+> We strongly recommend setting the **same user login password** on your new computer as your old computer during OS setup.
+> - **Why**: The Linux display manager's PAM authentication stack (e.g. SDDM, GDM) automatically uses your login password to unlock the desktop Keyring silently upon system login. When passwords match, tools like `agy`, VS Code, and GitHub CLI achieve a 100% zero-prompt, seamless transition.
+> - **If you use a different password on the new machine**: When launching `agy` or VS Code for the first time, a desktop prompt will ask to unlock the keyring. Simply enter your **old computer's password** once to unlock, and you can subsequently synchronize the keyring password via `seahorse` or system settings.
 
 ### 5. Smart Username & Path Adaptation
 - If your old username was `alice` and your new machine username is `bob`, OmaMigrate's restoration engine automatically sanitizes and rewrites hardcoded paths across configuration files (`.codex`, `.claude.json`, `antigravity-cli`, `git/config`).
