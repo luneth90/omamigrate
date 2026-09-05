@@ -22,6 +22,8 @@ mkdir -p "${BACKUP_DIR}/pkg_meta"
 msg_info "Scanning and filtering installed software packages..."
 pacman -Qqe | grep -vE "${HW_EXCLUDE_REGEX}" > "${BACKUP_DIR}/pkg_meta/packages_explicit.txt" || true
 pacman -Qqem > "${BACKUP_DIR}/pkg_meta/packages_aur.txt" 2>/dev/null || true
+echo "$HOME" > "${BACKUP_DIR}/pkg_meta/source_home.txt"
+echo "$(id -un)" > "${BACKUP_DIR}/pkg_meta/source_user.txt"
 msg_ok "Exported $(wc -l < "${BACKUP_DIR}/pkg_meta/packages_explicit.txt") explicit packages (hardware drivers excluded)"
 
 # 2. Export User Dotfiles & Credentials

@@ -79,7 +79,7 @@ Scope {
             enabled: !root.isProcessing
             onClicked: {
               root.isProcessing = true
-              root.statusText = "Exporting system ecosystem..."
+              root.statusText = "Exporting in terminal..."
               exportProcess.running = true
             }
           }
@@ -102,7 +102,7 @@ Scope {
             enabled: !root.isProcessing
             onClicked: {
               root.isProcessing = true
-              root.statusText = "Restoring ecosystem..."
+              root.statusText = "Restoring in terminal..."
               restoreProcess.running = true
             }
           }
@@ -131,13 +131,13 @@ Scope {
 
   Process {
     id: exportProcess
-    command: ["omamigrate", "export"]
+    command: ["xdg-terminal-exec", "bash", "-c", "omamigrate export; echo; read -p 'Press Enter to finish...'"]
     onExited: function(code) {
       root.isProcessing = false
       if (code === 0) {
         root.statusText = "Export completed: ~/omarchy-migration.tar.gz"
       } else {
-        root.statusText = "Export failed. Check terminal permissions."
+        root.statusText = "Export finished or cancelled."
       }
     }
   }
@@ -152,13 +152,13 @@ Scope {
 
   Process {
     id: restoreProcess
-    command: ["omamigrate", "restore", Qt.resolvedUrl("~/Downloads/omarchy-migration.tar.gz")]
+    command: ["xdg-terminal-exec", "bash", "-c", "omamigrate restore ~/Downloads/omarchy-migration.tar.gz; echo; read -p 'Press Enter to finish...'"]
     onExited: function(code) {
       root.isProcessing = false
       if (code === 0) {
         root.statusText = "Restoration completed successfully!"
       } else {
-        root.statusText = "Restore failed. Try running in terminal."
+        root.statusText = "Restore finished or cancelled."
       }
     }
   }
