@@ -48,6 +48,18 @@ CONFIG_TARGETS=(
   "tmux"
   "1Password"
   "obsidian"
+  # Mainstream Proxy Clients & GUIs
+  "clash"
+  "clash-verge"
+  "clash-verge-rev"
+  "clash-nyanpasu"
+  "mihomo"
+  "mihomo-party"
+  "flclash"
+  "nekoray"
+  "Matsuri"
+  "v2raya"
+  "sing-box"
 )
 
 # AI Agents directories to backup from ~/
@@ -59,11 +71,38 @@ AI_AGENT_DIRS=(
   ".grok"
 )
 
-# Core software dependencies guaranteed to install
+# System-level proxy directories in /etc to backup if present
+PROXY_SYSTEM_DIRS=(
+  "/etc/sing-box"
+  "/etc/mihomo"
+  "/etc/v2raya"
+  "/etc/xray"
+  "/etc/v2ray"
+  "/etc/daed"
+)
+
+# System-level proxy individual files to backup if present
+PROXY_SYSTEM_FILES=(
+  "/etc/proxychains.conf"
+  "/usr/local/bin/sing-box-node-rotate"
+)
+
+# System-level proxy systemd service & timer units
+PROXY_SYSTEM_SERVICES=(
+  "sing-box.service"
+  "sing-box-node-rotate.service"
+  "sing-box-node-rotate.timer"
+  "mihomo.service"
+  "v2raya.service"
+  "xray.service"
+  "v2ray.service"
+  "daed.service"
+  "daed-next.service"
+)
+
+# Fundamental system utilities guaranteed during restore
 CORE_DEPENDENCIES=(
-  "sing-box"
   "pass"
-  "himalaya"
   "fcitx5"
   "fcitx5-chinese-addons"
   "fcitx5-configtool"

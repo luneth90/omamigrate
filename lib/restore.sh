@@ -49,6 +49,14 @@ if [ -n "${OLD_HOME}" ] && [ "${CURRENT_HOME}" != "${OLD_HOME}" ]; then
   [ -f "${CURRENT_HOME}/.gemini/antigravity-cli/settings.json" ] && sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" "${CURRENT_HOME}/.gemini/antigravity-cli/settings.json"
   [ -f "${CURRENT_HOME}/.config/git/config" ] && sed -i "s|!${OLD_HOME}.*gh auth git-credential|!gh auth git-credential|g" "${CURRENT_HOME}/.config/git/config"
   [ -d "${CURRENT_HOME}/.thunderbird" ] && find "${CURRENT_HOME}/.thunderbird" -type f -name "*.ini" -exec sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" {} + 2>/dev/null || true
+
+  # Adapt proxy configuration paths
+  for pdir in clash clash-verge clash-verge-rev clash-nyanpasu mihomo mihomo-party nekoray Matsuri flclash v2raya; do
+    if [ -d "${CURRENT_HOME}/.config/${pdir}" ]; then
+      find "${CURRENT_HOME}/.config/${pdir}" -type f \( -name "*.yaml" -o -name "*.yml" -o -name "*.json" -o -name "*.toml" \) \
+        -exec sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" {} + 2>/dev/null || true
+    fi
+  done
 fi
 
 # 5. Fix permissions for security and credentials
@@ -63,24 +71,35 @@ sudo chown -R "${CURRENT_USER}:${CURRENT_USER}" \
   "${CURRENT_HOME}/.codex" \
   "${CURRENT_HOME}/.gemini" \
   "${CURRENT_HOME}/.grok" \
-  "${CURRENT_HOME}/.thunderbird" 2>/dev/null || true
+  "${CURRENT_HOME}/.thunderbird" \
+  "${CURRENT_HOME}/.proxychains" 2>/dev/null || true
 
 [ -d "${CURRENT_HOME}/.ssh" ] && chmod 700 "${CURRENT_HOME}/.ssh" && chmod -f 600 "${CURRENT_HOME}/.ssh"/id_* 2>/dev/null || true
 [ -d "${CURRENT_HOME}/.gnupg" ] && chmod 700 "${CURRENT_HOME}/.gnupg" && find "${CURRENT_HOME}/.gnupg" -type f -exec chmod 600 {} + 2>/dev/null || true
 [ -d "${CURRENT_HOME}/.password-store" ] && chmod 700 "${CURRENT_HOME}/.password-store"
 [ -d "${CURRENT_HOME}/.local/bin" ] && chmod +x "${CURRENT_HOME}/.local/bin"/* 2>/dev/null || true
 
-# 6. Restore system-level configs (sing-box, rotate script, system timers)
+# 6. Restore system-level configs (sing-box, mihomo, v2raya, xray, v2ray, daed, proxychains)
 echo "==> 4. Restoring system-level configurations..."
-if [ -d "${SCRIPT_DIR}/system_root/etc/sing-box" ]; then
-  sudo mkdir -p /etc/sing-box
-  sudo cp -p "${SCRIPT_DIR}/system_root/etc/sing-box/config.json" /etc/sing-box/
-  if getent group sing-box >/dev/null 2>&1; then
-    sudo chown root:sing-box /etc/sing-box/config.json
-  else
-    sudo chown root:root /etc/sing-box/config.json
+for etc_dir in sing-box mihomo v2raya xray v2ray daed; do
+  if [ -d "${SCRIPT_DIR}/system_root/etc/${etc_dir}" ]; then
+    echo "    Restoring /etc/${etc_dir}..."
+    sudo mkdir -p "/etc/${etc_dir}"
+    sudo cp -rp "${SCRIPT_DIR}/system_root/etc/${etc_dir}/." "/etc/${etc_dir}/"
+    if [ "${etc_dir}" = "sing-box" ]; then
+      if getent group sing-box >/dev/null 2>&1; then
+        sudo chown -R root:sing-box "/etc/sing-box"
+      else
+        sudo chown -R root:root "/etc/sing-box"
+      fi
+      [ -f "/etc/sing-box/config.json" ] && sudo chmod 640 "/etc/sing-box/config.json"
+    fi
   fi
-  sudo chmod 640 /etc/sing-box/config.json
+done
+
+if [ -f "${SCRIPT_DIR}/system_root/etc/proxychains.conf" ]; then
+  echo "    Restoring /etc/proxychains.conf..."
+  sudo cp -p "${SCRIPT_DIR}/system_root/etc/proxychains.conf" /etc/proxychains.conf
 fi
 
 if [ -f "${SCRIPT_DIR}/system_root/usr/local/bin/sing-box-node-rotate" ]; then
@@ -124,7 +143,10 @@ if [ -f "$PKG_FILE" ]; then
 fi
 
 # Ensure core dependencies
-CORE_DEPS=(sing-box pass himalaya fcitx5 fcitx5-chinese-addons fcitx5-configtool jq curl)
+CORE_DEPS=(pass fcitx5 fcitx5-chinese-addons fcitx5-configtool jq curl)
+if [ -d "${SCRIPT_DIR}/system_root/etc/sing-box" ]; then
+  CORE_DEPS+=("sing-box")
+fi
 CORE_MISSING=()
 for cpkg in "${CORE_DEPS[@]}"; do
   if ! pacman -Qi "$cpkg" >/dev/null 2>&1; then
@@ -154,17 +176,62 @@ fi
 # 9. Activate and enable services & timers
 echo "==> 7. Activating background timers and services..."
 sudo systemctl daemon-reload
-if command -v sing-box >/dev/null 2>&1; then
-  echo "    Enabling sing-box service & node rotate timer..."
-  sudo systemctl enable --now sing-box.service 2>/dev/null || true
-  if [ -f "/etc/systemd/system/sing-box-node-rotate.timer" ]; then
-    sudo systemctl enable --now sing-box-node-rotate.timer 2>/dev/null || true
+
+# sing-box
+if [ -d "${SCRIPT_DIR}/system_root/etc/sing-box" ] || [ -f "/etc/systemd/system/sing-box.service" ]; then
+  if command -v sing-box >/dev/null 2>&1; then
+    echo "    Enabling sing-box service & node rotate timer..."
+    sudo systemctl enable --now sing-box.service 2>/dev/null || true
+    if [ -f "/etc/systemd/system/sing-box-node-rotate.timer" ]; then
+      sudo systemctl enable --now sing-box-node-rotate.timer 2>/dev/null || true
+    fi
   fi
 fi
 
-echo "    Enabling daily email triage timer (icloud-mail-triage.timer)..."
+# mihomo
+if [ -d "${SCRIPT_DIR}/system_root/etc/mihomo" ] || [ -f "/etc/systemd/system/mihomo.service" ]; then
+  if command -v mihomo >/dev/null 2>&1; then
+    echo "    Enabling mihomo service..."
+    sudo systemctl enable --now mihomo.service 2>/dev/null || true
+  fi
+fi
+
+# v2raya
+if [ -d "${SCRIPT_DIR}/system_root/etc/v2raya" ] || [ -f "/etc/systemd/system/v2raya.service" ]; then
+  if command -v v2raya >/dev/null 2>&1; then
+    echo "    Enabling v2raya service..."
+    sudo systemctl enable --now v2raya.service 2>/dev/null || true
+  fi
+fi
+
+# xray / v2ray
+if [ -d "${SCRIPT_DIR}/system_root/etc/xray" ] || [ -f "/etc/systemd/system/xray.service" ]; then
+  if command -v xray >/dev/null 2>&1; then
+    echo "    Enabling xray service..."
+    sudo systemctl enable --now xray.service 2>/dev/null || true
+  fi
+fi
+if [ -d "${SCRIPT_DIR}/system_root/etc/v2ray" ] || [ -f "/etc/systemd/system/v2ray.service" ]; then
+  if command -v v2ray >/dev/null 2>&1; then
+    echo "    Enabling v2ray service..."
+    sudo systemctl enable --now v2ray.service 2>/dev/null || true
+  fi
+fi
+
+# daed
+if [ -d "${SCRIPT_DIR}/system_root/etc/daed" ] || [ -f "/etc/systemd/system/daed.service" ]; then
+  if command -v daed >/dev/null 2>&1; then
+    echo "    Enabling daed service..."
+    sudo systemctl enable --now daed.service 2>/dev/null || true
+  fi
+fi
+
+# user systemd timers
 systemctl --user daemon-reload
-systemctl --user enable --now icloud-mail-triage.timer 2>/dev/null || true
+if [ -f "${CURRENT_HOME}/.config/systemd/user/icloud-mail-triage.timer" ]; then
+  echo "    Enabling daily email triage timer (icloud-mail-triage.timer)..."
+  systemctl --user enable --now icloud-mail-triage.timer 2>/dev/null || true
+fi
 
 # 10. Reload desktop environment
 echo "==> 8. Reloading Hyprland & Omarchy shell..."

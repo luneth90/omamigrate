@@ -33,9 +33,9 @@ for f in .bashrc .bash_profile .profile .claude.json; do
   [ -f "$HOME/$f" ] && cp -p "$HOME/$f" "${BACKUP_DIR}/user_home/"
 done
 
-for dir in .ssh .gnupg .password-store; do
+for dir in .ssh .gnupg .password-store .proxychains; do
   if [ -d "$HOME/$dir" ]; then
-    msg_step "Including credential store: ~/${dir}"
+    msg_step "Including credential / proxy store: ~/${dir}"
     cp -rp "$HOME/$dir" "${BACKUP_DIR}/user_home/"
   fi
 done
@@ -74,22 +74,30 @@ if [ -d "$HOME/.thunderbird" ]; then
     "$HOME/.thunderbird/" "${BACKUP_DIR}/user_home/.thunderbird/" 2>/dev/null || true
 fi
 
-# 3. System-level Services & Configuration
-msg_info "Collecting system-level services (requires sudo access)..."
-if [ -d "/etc/sing-box" ]; then
-  msg_step "Backing up /etc/sing-box/config.json"
-  sudo mkdir -p "${BACKUP_DIR}/system_root/etc/sing-box"
-  sudo cp -p /etc/sing-box/config.json "${BACKUP_DIR}/system_root/etc/sing-box/" 2>/dev/null || true
-fi
+# 3. System-level Services & Proxy Configuration
+msg_info "Collecting system-level proxy configurations & services (requires sudo access)..."
 
-if [ -f "/usr/local/bin/sing-box-node-rotate" ]; then
-  msg_step "Backing up /usr/local/bin/sing-box-node-rotate"
-  sudo mkdir -p "${BACKUP_DIR}/system_root/usr/local/bin"
-  sudo cp -p /usr/local/bin/sing-box-node-rotate "${BACKUP_DIR}/system_root/usr/local/bin/"
-fi
+# Proxy directories in /etc
+for pdir in "${PROXY_SYSTEM_DIRS[@]}"; do
+  if [ -d "$pdir" ]; then
+    msg_step "Backing up system proxy directory: ${pdir}"
+    sudo mkdir -p "${BACKUP_DIR}/system_root${pdir}"
+    sudo cp -rp "${pdir}/." "${BACKUP_DIR}/system_root${pdir}/" 2>/dev/null || true
+  fi
+done
 
+# Proxy individual files (e.g. /etc/proxychains.conf, /usr/local/bin/sing-box-node-rotate)
+for pfile in "${PROXY_SYSTEM_FILES[@]}"; do
+  if [ -f "$pfile" ]; then
+    msg_step "Backing up system proxy file: ${pfile}"
+    sudo mkdir -p "${BACKUP_DIR}/system_root$(dirname "$pfile")"
+    sudo cp -p "$pfile" "${BACKUP_DIR}/system_root${pfile}" 2>/dev/null || true
+  fi
+done
+
+# Systemd units for proxies & services
 sudo mkdir -p "${BACKUP_DIR}/system_root/etc/systemd/system"
-for s in sing-box-node-rotate.service sing-box-node-rotate.timer; do
+for s in "${PROXY_SYSTEM_SERVICES[@]}"; do
   if [ -f "/etc/systemd/system/$s" ]; then
     msg_step "Backing up systemd unit: ${s}"
     sudo cp -p "/etc/systemd/system/$s" "${BACKUP_DIR}/system_root/etc/systemd/system/"

@@ -15,7 +15,7 @@
 
 Traditional dotfiles sync tools (such as Git-based UI sync widgets) only copy basic configuration files (`~/.config/hypr`). When setting up a new computer, you are still left with hours of manual work:
 - Re-installing dozens of GUI applications and CLI packages;
-- Re-configuring system-level services like **sing-box** proxies and auto-rotation timers;
+- Re-configuring network proxy services (**sing-box**, **Mihomo / Clash Verge**, **v2rayA**, **daed**, etc.) and system timers;
 - Re-authenticating all your **AI developer tools** (Claude Code, OpenAI Codex, Antigravity `agy`, Grok);
 - Repairing broken automated services or email clients due to missing GPG keys or `pass` password stores;
 - Manually fixing broken absolute paths when your username on the new machine differs from the old machine.
@@ -25,7 +25,7 @@ Traditional dotfiles sync tools (such as Git-based UI sync widgets) only copy ba
 ```
 [ Old Omarchy Machine ]                                   [ New Omarchy Machine ]
   ├── Explicit Packages (Filtered)                          ├── Auto-install Packages (yay/pacman)
-  ├── sing-box & Systemd Timers      === LocalSend / ===>   ├── Restore Services & Auto-enable Timers
+  ├── Proxy Ecosystem (sing-box/Mihomo/Clash/v2rayA/daed) === LocalSend / ===> ├── Restore Services & Auto-enable Timers
   ├── Mail Profiles & Pass/GPG Keys     Archive (tar)       ├── Restore GPG Keys & Password Store
   ├── AI Sessions (Claude/Codex/Agy)                        ├── Zero-Login AI Session Recovery
   └── Desktop & Hyprland Configs                            └── Auto-adapt Username Paths & Reload
@@ -40,10 +40,22 @@ Traditional dotfiles sync tools (such as Git-based UI sync widgets) only copy ba
 - **Smart Driver Blacklisting**: Automatically excludes Apple Silicon (Asahi Linux) and vendor-specific kernel drivers (`linux-asahi`, `m1n1`, `uboot`, `speakersafetyd`).
 - **Result**: You can migrate freely between an **Apple Silicon Mac (aarch64)** and an **Intel/AMD PC (x86_64)** without package manager conflicts. On the target machine, `yay` and `pacman` dynamically download the binaries natively compiled for that architecture.
 
-### 2. System-Level Network & Daemons (`sing-box`)
-- Safely packages `/etc/sing-box/config.json` with appropriate group permissions (`640 root:sing-box`).
-- Preserves `/usr/local/bin/sing-box-node-rotate` and systemd timers (`sing-box-node-rotate.timer`).
-- Automatically enables and starts services upon restoration.
+### 2. Universal Mainstream Proxy Ecosystem Support (Multi-Proxy Ready)
+Whether you prefer background daemons or modern GUI desktop clients, OmaMigrate handles end-to-end migration and automatic activation:
+- **System Daemons & Transparent Proxies**:
+  - **sing-box**: Preserves `/etc/sing-box/` rule configurations, `640 root:sing-box` group permissions, node auto-rotation scripts, and systemd service/timer units.
+  - **Mihomo (formerly Clash.Meta)**: Restores `/etc/mihomo/` system configurations, `~/.config/mihomo/` user configurations, and `mihomo.service`.
+  - **v2rayA / Xray / v2ray**: Restores `/etc/v2raya/`, `/etc/xray/`, `/etc/v2ray/`, and enables corresponding background systemd services.
+  - **daed / daed-next**: Migrates eBPF-based high-performance transparent proxy configurations (`/etc/daed/`) and daemon services.
+- **Desktop GUI Clients**:
+  - **Clash Verge / Clash Verge Rev** (`~/.config/clash-verge`, `~/.config/clash-verge-rev`)
+  - **Clash Nyanpasu** (`~/.config/clash-nyanpasu`)
+  - **Mihomo Party** (`~/.config/mihomo-party`)
+  - **Flclash** (`~/.config/flclash`)
+  - **NekoBox / Nekoray / Matsuri** (`~/.config/nekoray`, `~/.config/Matsuri`)
+  - Preserves all subscriptions, routing rules, proxies, and profile caches for immediate out-of-the-box connectivity.
+- **Terminal & Global Proxy Utilities**:
+  - Automatically migrates **Proxychains-ng** (`~/.proxychains`, `/etc/proxychains.conf`) and shell environment proxy wrappers.
 
 ### 3. Email Clients & Automated Workflow Migration
 - **Desktop & CLI Mail Clients**:

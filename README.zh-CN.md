@@ -15,7 +15,7 @@
 
 传统的点对点配置同步工具（如基于 Git 的 UI 插件）通常只能同步基础的用户配置文件（`~/.config/hypr`）。当您拿到一台新电脑时，依然面临繁重的手动配置成本：
 - 手动重新安装几十个 GUI 桌面软件与开发应用；
-- 手动重新配置 **sing-box** 代理核心、轮换脚本与系统级定时器；
+- 手动重新配置主流代理服务（**sing-box**、**Mihomo / Clash Verge**、**v2rayA**、**daed** 等）及定时器；
 - 手动重新登录所有的 **AI 命令行工具**（Claude Code、OpenAI Codex、Antigravity `agy`、xAI Grok）；
 - **邮件与定时自动化服务** 因缺少 GPG 密钥、`pass` 密码库或用户 systemd 定时器而无法工作；
 - 新老电脑用户名不同（如从 `alice` 变成 `bob`）时，因配置中残留的绝对路径报错。
@@ -25,7 +25,7 @@
 ```
 [ 老电脑 (源机器) ]                                      [ 新电脑 (目标机器) ]
   ├── 显式应用清单 (自动过滤硬件驱动)                     ├── 差异化静默补齐安装 (yay/pacman)
-  ├── sing-box 核心配置与系统定时器   === LocalSend 隔空 / ===> ├── 还原系统服务并自启定时器
+  ├── 代理生态 (sing-box/Mihomo/Clash/v2rayA/daed) === LocalSend 隔空 / ===> ├── 还原系统服务并自启定时器
   ├── 邮件客户端配置、GPG与pass密码库     迁移归档包 (tar)    ├── 还原 GPG 密钥与密码库
   ├── AI 全套登录 Session (Claude/Agy)                    ├── 继承登录态，免扫码免登录
   └── 桌面环境与终端配置                                  └── 自动纠偏用户名路径并热重载
@@ -40,10 +40,22 @@
 - **智能硬件黑名单过滤**：自动剔除 Apple Silicon (Asahi Linux) 或特定机型的底层驱动与内核（如 `linux-asahi`, `m1n1`, `uboot`, `speakersafetyd`）。
 - **效果**：无论老电脑是 **M 系列 Mac (aarch64)**，新电脑是 **Intel/AMD PC (x86_64)** 还是相反，在新机器上执行还原时，都会由新机在线拉取专为新机 CPU 编译的二进制包，绝无架构冲突。
 
-### 2. 系统级网络服务与节点轮换 (`sing-box`)
-- 自动提取并还原 `/etc/sing-box/config.json`，确保 `640 root:sing-box` 安全组权限。
-- 备份 `/usr/local/bin/sing-box-node-rotate` 轮换脚本。
-- 新机还原后自动激活并启动 `sing-box.service` 与 `sing-box-node-rotate.timer`。
+### 2. 全主流代理生态深度支持 (Multi-Proxy Ready)
+无论您偏好系统级常驻守护进程还是 GUI 桌面客户端，均可无缝打包还原并在新机自动唤醒自启：
+- **系统核心服务 (Daemon & Transparent Proxy)**：
+  - **sing-box**：自动备份还原 `/etc/sing-box/` 规则配置、安全组权限（`640 root:sing-box`）、自动轮换脚本及 `sing-box.service` / timer 定时器。
+  - **Mihomo (原 Clash.Meta)**：完整备份 `/etc/mihomo/` 系统核心配置、`~/.config/mihomo/` 用户配置与 `mihomo.service`。
+  - **v2rayA / Xray / v2ray**：完整备份 `/etc/v2raya/`、`/etc/xray/`、`/etc/v2ray/` 与对应后台服务并自启。
+  - **daed / daed-next**：支持基于 eBPF 的高性能透明代理配置 `/etc/daed/` 与后台常驻服务。
+- **桌面 GUI 代理客户端**：
+  - **Clash Verge / Clash Verge Rev** (`~/.config/clash-verge`, `~/.config/clash-verge-rev`)
+  - **Clash Nyanpasu** (`~/.config/clash-nyanpasu`)
+  - **Mihomo Party** (`~/.config/mihomo-party`)
+  - **Flclash** (`~/.config/flclash`)
+  - **NekoBox / Nekoray / Matsuri** (`~/.config/nekoray`, `~/.config/Matsuri`)
+  - 完整保留订阅节点、分流规则组、模式切换与本地缓存，新机开箱即连。
+- **终端与全局代理辅助**：
+  - 自动备份与还原 **Proxychains-ng**（`~/.proxychains`、`/etc/proxychains.conf`）与终端代理函数。
 
 ### 3. 邮件客户端与定时自动化工作流完整迁移
 - **主流邮件客户端无缝迁移**：
