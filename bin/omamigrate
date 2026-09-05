@@ -4,7 +4,8 @@
 # ==============================================================================
 set -euo pipefail
 
-BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REAL_SCRIPT="$(readlink -f "${BASH_SOURCE[0]}")"
+BIN_DIR="$(cd "$(dirname "${REAL_SCRIPT}")" && pwd)"
 LIB_DIR="$(cd "${BIN_DIR}/../lib" && pwd)"
 source "${LIB_DIR}/core.sh"
 
