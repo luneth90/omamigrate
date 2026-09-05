@@ -108,60 +108,11 @@ Whether you prefer background daemons or modern GUI desktop clients, OmaMigrate 
 
 ---
 
-## Quick Start Guide
+## Installation & Desktop Integration
 
-### Step 1: Export on Old Machine
+### 1. Official One-Command Install
 
-Run via the CLI tool:
-
-```bash
-# Export system ecosystem into ~/omarchy-migration.tar.gz
-omamigrate export
-```
-
-*(You will be prompted once for your `sudo` password to securely read `/etc/sing-box/config.json`)*.
-
----
-
-### Step 2: Transfer to New Machine
-
-**Option A: LocalSend (Fastest & Wireless)**
-```bash
-omamigrate send
-```
-Or open LocalSend on both machines and beam `~/omarchy-migration.tar.gz` to the new machine's `~/Downloads`.
-
-**Option B: Network SCP**
-```bash
-scp ~/omarchy-migration.tar.gz <new-user>@<new-ip>:~/Downloads/
-```
-
----
-
-### Step 3: Restore on New Machine
-
-On the new machine, open a terminal and run:
-
-```bash
-omamigrate restore ~/Downloads/omarchy-migration.tar.gz
-```
-
-*Or run standalone without installing OmaMigrate beforehand:*
-
-```bash
-mkdir -p ~/omarchy-restore && tar -xzf ~/Downloads/omarchy-migration.tar.gz -C ~/omarchy-restore
-cd ~/omarchy-restore && ./restore.sh
-```
-
-The restore engine will automatically install missing packages, restore configs, remap paths, start services, and reload your Hyprland desktop.
-
----
-
-## Omarchy Plugin Integration
-
-### Official One-Command Install (Recommended)
-
-Install and enable OmaMigrate directly using Omarchy's official plugin manager—just one command:
+Install and enable OmaMigrate directly using Omarchy's official plugin manager:
 
 ```bash
 omarchy plugin add https://github.com/<your-username>/omamigrate.git --enable
@@ -173,15 +124,57 @@ omarchy plugin update omamigrate   # Update to latest version
 omarchy plugin remove omamigrate   # Uninstall plugin
 ```
 
-### Desktop Global Shortcut Binding
+### 2. Desktop Global Shortcut Binding
 
-Add a keybinding in `~/.config/hypr/bindings.lua` to toggle the OmaMigrate HUD anywhere:
+Add a keybinding in `~/.config/hypr/bindings.lua` to summon the OmaMigrate HUD anywhere (recommended: `SUPER + CTRL + M`, perfectly non-conflicting with Omarchy default keys):
 
 ```lua
-o.bind("SUPER + SHIFT + M", "OmaMigrate", "omarchy-shell shell summon omamigrate '{}'")
+o.bind("SUPER + CTRL + M", "OmaMigrate", "omarchy-shell shell summon omamigrate '{}'")
 ```
 
-> **💡 Terminal CLI Note**: The plugin HUD dynamically resolves its own internal script path, so button clicks work immediately without modifying PATH. If you wish to run `omamigrate` directly from your shell terminal, you can optionally symlink it: `ln -s ~/.config/omarchy/plugins/omamigrate/bin/omamigrate ~/.local/bin/omamigrate`.
+---
+
+## Migration Workflow (Desktop-First)
+
+### Scenario A: One-Click GUI Workflow (Recommended)
+
+Press `SUPER + CTRL + M` anywhere on your Omarchy desktop to summon the OmaMigrate HUD:
+
+1. **📦 Step 1: Export & Package System**
+   - Click the first button to filter hardware drivers, capture packages, dotfiles, services, and credentials into `~/omarchy-migration.tar.gz`.
+2. **📡 Step 2: Beam via LocalSend**
+   - Click the second button to launch LocalSend and wireless beam the package directly to `~/Downloads` on your new computer.
+3. **⚡ Step 3: One-Click Restore on New Machine**
+   - On the new computer, open OmaMigrate and click the third button to automatically install packages, restore credentials, adapt paths, and reload Hyprland!
+
+### Scenario B: Bare-Metal Restoration (No Plugin Required)
+
+If your new computer has a fresh Omarchy installation without the OmaMigrate plugin installed yet, you can restore directly using the standalone engine embedded inside the archive:
+
+```bash
+mkdir -p ~/omarchy-restore && tar -xzf ~/Downloads/omarchy-migration.tar.gz -C ~/omarchy-restore
+cd ~/omarchy-restore && ./restore.sh
+```
+*The restore engine will install all applications, configure services, restore keyrings, and automatically restore the OmaMigrate plugin itself!*
+
+---
+
+## Advanced: Terminal CLI Usage
+
+OmaMigrate also ships with a fully featured CLI for headless or script-driven environments:
+
+```bash
+# Export system ecosystem
+omamigrate export [custom-output.tar.gz]
+
+# Beam archive via LocalSend
+omamigrate send [archive-path.tar.gz]
+
+# Restore ecosystem from archive
+omamigrate restore <archive-path.tar.gz>
+```
+
+> **💡 Note**: If you want to use the `omamigrate` command directly in your shell, symlink it to your PATH: `ln -s ~/.config/omarchy/plugins/omamigrate/bin/omamigrate ~/.local/bin/omamigrate`.
 
 ---
 

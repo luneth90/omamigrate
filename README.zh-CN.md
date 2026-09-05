@@ -95,81 +95,74 @@
 
 ---
 
-## 快速使用指南
+## 安装与桌面集成
 
-### 第一步：在老电脑上一键打包
+### 1. 官方指令一键安装
 
-在终端执行：
-
-```bash
-omamigrate export
-```
-
-*(过程中会提示输入一次 `sudo` 密码以安全读取 `/etc/sing-box/config.json`)*。
-
-打包完成后，在主目录生成 `~/omarchy-migration.tar.gz`。
-
----
-
-### 第二步：传输到新电脑
-
-**方式 A：LocalSend 局域网隔空快传（推荐）**
-```bash
-omamigrate send
-```
-两台电脑都打开 LocalSend，直接将压缩包隔空投送到新电脑的 `~/Downloads`。
-
-**方式 B：局域网终端 SCP 传输**
-```bash
-scp ~/omarchy-migration.tar.gz 新用户名@新电脑IP:~/Downloads/
-```
-
----
-
-### 第三步：在新电脑上一键还原
-
-在新电脑上直接执行：
-
-```bash
-omamigrate restore ~/Downloads/omarchy-migration.tar.gz
-```
-
-*若新电脑尚未安装 omamigrate 命令，也完全可以裸执行压缩包内置的原生引擎：*
-
-```bash
-mkdir -p ~/omarchy-restore && tar -xzf ~/Downloads/omarchy-migration.tar.gz -C ~/omarchy-restore
-cd ~/omarchy-restore && ./restore.sh
-```
-
-还原引擎会自动补齐缺失的应用软件、恢复各类凭据与服务、重映射路径并秒级重载桌面。
-
----
-
-## Omarchy 桌面插件集成
-
-### 方式一：Omarchy 官方命令一键安装（推荐）
-
-通过 Omarchy 官方插件系统直接从 Git 仓库安装并启用，一行搞定：
+在终端运行 Omarchy 官方插件管理指令，自动克隆并启用：
 
 ```bash
 omarchy plugin add https://github.com/<your-username>/omamigrate.git --enable
 ```
 
-*日常更新与卸载指令：*
+*日常管理指令：*
 ```bash
-omarchy plugin update omamigrate   # 一键拉取最新版更新
+omarchy plugin update omamigrate   # 一键更新至最新版
 omarchy plugin remove omamigrate   # 一键卸载
 ```
 
-### 绑定桌面召唤快捷键
+### 2. 绑定桌面全局快捷键
 
-在 `~/.config/hypr/bindings.lua` 中添加按键绑定，随时唤出可视化弹窗：
+编辑 `~/.config/hypr/bindings.lua`，添加一行无冲突快捷键绑定（推荐 `SUPER + CTRL + M`，与 Omarchy 系统默认键位完美契合）：
 
 ```lua
-o.bind("SUPER + SHIFT + M", "OmaMigrate", "omarchy-shell shell summon omamigrate '{}'")
+o.bind("SUPER + CTRL + M", "OmaMigrate", "omarchy-shell shell summon omamigrate '{}'")
 ```
 
-> **💡 终端命令行说明**：插件 GUI 界面内部已自动动态解析自身脚本路径，点击按钮即可直接触发。若您习惯在终端中直接键入 `omamigrate` 命令行，可按需添加全局软链接：`ln -s ~/.config/omarchy/plugins/omamigrate/bin/omamigrate ~/.local/bin/omamigrate`。
+---
+
+## 迁移使用流程 (Desktop Workflow)
+
+### 场景一：通过可视化界面一键操作（推荐）
+
+按下 `SUPER + CTRL + M` 即可随时唤出 OmaMigrate 操作面板：
+
+1. **📦 步骤一：一键打包 (Export)**
+   - 点击界面第 1 个按钮，自动弹出终端完成显式软件清单提取、硬件黑名单过滤、配置与凭证归档；
+   - 打包完成后在主目录生成 `~/omarchy-migration.tar.gz`。
+2. **📡 步骤二：隔空快传 (Beam via LocalSend)**
+   - 点击界面第 2 个按钮直接拉起 LocalSend，将压缩包无线投送到新电脑的 `~/Downloads` 目录。
+3. **⚡ 步骤三：在新电脑一键还原 (Restore)**
+   - 新电脑收到压缩包后，按下快捷键唤出 OmaMigrate 面板，点击第 3 个按钮即可自动完成全套环境安装、凭据还原、路径自适应并秒级重载 Hyprland 桌面！
+
+### 场景二：新电脑裸机还原（无需预装插件）
+
+若新电脑是刚安装的纯净 Omarchy 系统，尚未安装 OmaMigrate 插件，也无需担心！压缩包内自带了**自包含的原生还原引擎**，开箱即可裸执行：
+
+```bash
+mkdir -p ~/omarchy-restore && tar -xzf ~/Downloads/omarchy-migration.tar.gz -C ~/omarchy-restore
+cd ~/omarchy-restore && ./restore.sh
+```
+*还原脚本会自动补齐缺失软件、恢复密钥凭据、重配网络服务，并自动将 OmaMigrate 插件本身一并恢复到新电脑。*
+
+---
+
+## 高级：终端命令行调用（CLI 极客模式）
+
+插件已内置了完整的 CLI 命令行接口，若您偏好在终端中纯命令行执行：
+
+```bash
+# 一键打包
+omamigrate export [自定义输出路径.tar.gz]
+
+# 调起 LocalSend 发送
+omamigrate send [待发送压缩包路径]
+
+# 一键还原
+omamigrate restore <归档包路径.tar.gz>
+```
+
+> **💡 提示**：若希望在终端全局直接输入 `omamigrate` 命令，可建立软链接：`ln -s ~/.config/omarchy/plugins/omamigrate/bin/omamigrate ~/.local/bin/omamigrate`。
 
 ---
 
