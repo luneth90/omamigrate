@@ -66,6 +66,14 @@ for agent_dir in "${AI_AGENT_DIRS[@]}"; do
   fi
 done
 
+# Desktop Mail Clients (Thunderbird profiles & account settings)
+if [ -d "$HOME/.thunderbird" ]; then
+  msg_step "Including Thunderbird profiles: ~/.thunderbird"
+  mkdir -p "${BACKUP_DIR}/user_home/.thunderbird"
+  rsync -a --exclude='cache2' --exclude='startupCache' \
+    "$HOME/.thunderbird/" "${BACKUP_DIR}/user_home/.thunderbird/" 2>/dev/null || true
+fi
+
 # 3. System-level Services & Configuration
 msg_info "Collecting system-level services (requires sudo access)..."
 if [ -d "/etc/sing-box" ]; then

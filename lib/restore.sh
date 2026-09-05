@@ -48,6 +48,7 @@ if [ "${CURRENT_HOME}" != "${OLD_HOME}" ]; then
   [ -f "${CURRENT_HOME}/.claude.json" ] && sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" "${CURRENT_HOME}/.claude.json"
   [ -f "${CURRENT_HOME}/.gemini/antigravity-cli/settings.json" ] && sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" "${CURRENT_HOME}/.gemini/antigravity-cli/settings.json"
   [ -f "${CURRENT_HOME}/.config/git/config" ] && sed -i "s|!${OLD_HOME}.*gh auth git-credential|!gh auth git-credential|g" "${CURRENT_HOME}/.config/git/config"
+  [ -d "${CURRENT_HOME}/.thunderbird" ] && find "${CURRENT_HOME}/.thunderbird" -type f -name "*.ini" -exec sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" {} + 2>/dev/null || true
 fi
 
 # 5. Fix permissions for security and credentials
@@ -61,7 +62,8 @@ sudo chown -R "${CURRENT_USER}:${CURRENT_USER}" \
   "${CURRENT_HOME}/.claude" \
   "${CURRENT_HOME}/.codex" \
   "${CURRENT_HOME}/.gemini" \
-  "${CURRENT_HOME}/.grok" 2>/dev/null || true
+  "${CURRENT_HOME}/.grok" \
+  "${CURRENT_HOME}/.thunderbird" 2>/dev/null || true
 
 [ -d "${CURRENT_HOME}/.ssh" ] && chmod 700 "${CURRENT_HOME}/.ssh" && chmod -f 600 "${CURRENT_HOME}/.ssh"/id_* 2>/dev/null || true
 [ -d "${CURRENT_HOME}/.gnupg" ] && chmod 700 "${CURRENT_HOME}/.gnupg" && find "${CURRENT_HOME}/.gnupg" -type f -exec chmod 600 {} + 2>/dev/null || true

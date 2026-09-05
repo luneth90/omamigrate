@@ -41,6 +41,8 @@ CONFIG_TARGETS=(
   "mise"
   "icloud-mail-triage"
   "himalaya"
+  "aerc"
+  "neomutt"
   "herdr"
   "tensaku"
   "tmux"

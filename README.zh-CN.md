@@ -17,7 +17,7 @@
 - 手动重新安装几十个 GUI 桌面软件与开发应用；
 - 手动重新配置 **sing-box** 代理核心、轮换脚本与系统级定时器；
 - 手动重新登录所有的 **AI 命令行工具**（Claude Code、OpenAI Codex、Antigravity `agy`、xAI Grok）；
-- **AI 邮箱自动清理系统**（`icloud-mail-triage`）因缺少 GPG 密钥与 `pass` 密码库而鉴权失败；
+- **邮件与定时自动化服务** 因缺少 GPG 密钥、`pass` 密码库或用户 systemd 定时器而无法工作；
 - 新老电脑用户名不同（如从 `xiaowei` 变成 `luneth90`）时，因配置中残留的绝对路径报错。
 
 **OmaMigrate** 专为彻底解决上述痛点而生，提供一套工业级的**全系统生态一键迁移引擎**：
@@ -26,7 +26,7 @@
 [ 老电脑 (源机器) ]                                      [ 新电脑 (目标机器) ]
   ├── 显式应用清单 (自动过滤硬件驱动)                     ├── 差异化静默补齐安装 (yay/pacman)
   ├── sing-box 核心配置与系统定时器   === LocalSend 隔空 / ===> ├── 还原系统服务并自启定时器
-  ├── 邮箱清理脚本、GPG密钥与pass库       迁移归档包 (tar)    ├── 还原 GPG 密钥与密码库
+  ├── 邮件客户端配置、GPG与pass密码库     迁移归档包 (tar)    ├── 还原 GPG 密钥与密码库
   ├── AI 全套登录 Session (Claude/Agy)                    ├── 继承登录态，免扫码免登录
   └── 桌面环境与终端配置                                  └── 自动纠偏用户名路径并热重载
 ```
@@ -45,10 +45,15 @@
 - 备份 `/usr/local/bin/sing-box-node-rotate` 轮换脚本。
 - 新机还原后自动激活并启动 `sing-box.service` 与 `sing-box-node-rotate.timer`。
 
-### 3. AI 自动化工作流完整复原 (iCloud 邮箱清理)
-- 完整备份 `~/.local/bin/icloud-mail-triage` 自动化清理脚本（支持 Agy Gemini 3.8 Flash High 或 Claude）。
-- 完整打包 **GPG 密钥库**（`~/.gnupg`）与 **Unix 密码管理器**（`~/.password-store`），确保 `pass show` 密码提取在新机即刻可用。
-- 自动注册并激活 `systemd --user` 每日定时器（`icloud-mail-triage.timer`）。
+### 3. 邮件客户端与定时自动化工作流完整迁移
+- **主流邮件客户端无缝迁移**：
+  - **桌面客户端（Thunderbird 等）**：完整打包并还原 `~/.thunderbird/` 用户 Profile、账户配置、离线邮箱缓存与本地凭证环，新机打开即用，无需重新配置 IMAP/SMTP 账户。
+  - **终端/CLI 客户端**：完整支持 `Himalaya`、`Aerc`、`Neomutt` 等命令行邮件客户端配置目录。
+- **凭据与密钥库安全继承**：
+  - 完整打包 **GPG 密钥库**（`~/.gnupg`）与 **Unix 密码管理器**（`~/.password-store`），确保通过 `pass show` 调取的应用密码在新机即刻可用。
+- **自动化工作流与后台定时器**：
+  - 自动保留 `~/.local/bin/` 里的邮件管理/分类/清理脚本（例如基于 `agy` 或各类模型的自动化工具）。
+  - 自动注册并激活对应的 `systemd --user` 每日定时器。
 
 ### 4. AI 模型工具免扫码登录 (Zero-Login)
 - 完整打包主流 AI 开发工具的登录 Session 与授权 Token：

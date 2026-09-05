@@ -17,7 +17,7 @@ Traditional dotfiles sync tools (such as Git-based UI sync widgets) only copy ba
 - Re-installing dozens of GUI applications and CLI packages;
 - Re-configuring system-level services like **sing-box** proxies and auto-rotation timers;
 - Re-authenticating all your **AI developer tools** (Claude Code, OpenAI Codex, Antigravity `agy`, Grok);
-- Repairing broken automated services like **AI email triage** (`icloud-mail-triage`) due to missing GPG keys or `pass` password stores;
+- Repairing broken automated services or email clients due to missing GPG keys or `pass` password stores;
 - Manually fixing broken absolute paths when your username on the new machine differs from the old machine.
 
 **OmaMigrate** solves this by providing a unified, cross-architecture **whole-system state migration engine**:
@@ -26,7 +26,7 @@ Traditional dotfiles sync tools (such as Git-based UI sync widgets) only copy ba
 [ Old Omarchy Machine ]                                   [ New Omarchy Machine ]
   ├── Explicit Packages (Filtered)                          ├── Auto-install Packages (yay/pacman)
   ├── sing-box & Systemd Timers      === LocalSend / ===>   ├── Restore Services & Auto-enable Timers
-  ├── AI Triage & Pass/GPG Keys         Archive (tar)       ├── Restore GPG Keys & Password Store
+  ├── Mail Profiles & Pass/GPG Keys     Archive (tar)       ├── Restore GPG Keys & Password Store
   ├── AI Sessions (Claude/Codex/Agy)                        ├── Zero-Login AI Session Recovery
   └── Desktop & Hyprland Configs                            └── Auto-adapt Username Paths & Reload
 ```
@@ -45,10 +45,14 @@ Traditional dotfiles sync tools (such as Git-based UI sync widgets) only copy ba
 - Preserves `/usr/local/bin/sing-box-node-rotate` and systemd timers (`sing-box-node-rotate.timer`).
 - Automatically enables and starts services upon restoration.
 
-### 3. AI Automation & Workflow Recovery (iCloud Mail Triage)
-- Fully preserves automated workflows such as `~/.local/bin/icloud-mail-triage` (driven by `agy` Gemini 3.8 Flash High or Claude).
-- Packages the critical **GPG keys** (`~/.gnupg`) and **Unix password store** (`~/.password-store`), ensuring credentials retrieved via `pass show` work immediately.
-- Auto-registers and starts the user systemd timer (`icloud-mail-triage.timer`).
+### 3. Email Clients & Automated Workflow Migration
+- **Desktop & CLI Mail Clients**:
+  - **Desktop Clients (e.g. Thunderbird)**: Full backup and restoration of `~/.thunderbird/` profiles, account setups, offline mail stores, and local keyrings—launch Thunderbird on the new machine and start reading emails immediately without re-entering IMAP/SMTP passwords.
+  - **Terminal / CLI Clients**: Full support for `Himalaya`, `Aerc`, and `Neomutt` configuration trees.
+- **Secure Password & GPG Credential Store**:
+  - Packages the critical **GPG keys** (`~/.gnupg`) and **Unix password store** (`~/.password-store`), ensuring credentials retrieved via `pass show` work immediately.
+- **Automation Scripts & Background Timers**:
+  - Preserves custom mail management, triage, or automated notification scripts under `~/.local/bin/` and their associated `systemd --user` timers.
 
 ### 4. Zero-Login AI State Persistence
 - Migrates active sessions and OAuth tokens for:
