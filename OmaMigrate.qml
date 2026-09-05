@@ -3,33 +3,85 @@ import QtQuick.Layouts
 import QtQuick.Controls
 import Quickshell
 import Quickshell.Io
+import Quickshell.Wayland
 
-Scope {
+Item {
   id: root
 
+  property var shell: null
+  property var manifest: null
   property bool opened: false
   property string statusText: "Ready to migrate or sync."
   property bool isProcessing: false
 
-  function summon() {
-    opened = !opened
+  function open(payloadJson) {
+    root.opened = true
+    Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
 
-  FloatingWindow {
-    id: window
-    visible: root.opened
-    title: "OmaMigrate"
-    width: 480
-    height: 380
+  function close() {
+    root.opened = false
+  }
 
-    color: "#1e1e2e"
+  function dismiss() {
+    root.opened = false
+    if (root.shell && typeof root.shell.hide === "function") {
+      root.shell.hide("omamigrate")
+    }
+  }
+
+  function summon() {
+    if (root.opened) root.dismiss()
+    else root.open("{}")
+  }
+
+  PanelWindow {
+    id: panel
+    visible: root.opened
+    anchors { top: true; bottom: true; left: true; right: true }
+    color: "transparent"
+    WlrLayershell.namespace: "omamigrate"
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+    exclusionMode: ExclusionMode.Ignore
 
     Rectangle {
       anchors.fill: parent
-      color: "#1e1e2e"
+      color: "#80000000"
+
+      MouseArea {
+        anchors.fill: parent
+        onClicked: root.dismiss()
+      }
+    }
+
+    Rectangle {
+      id: card
+      width: 480
+      height: 380
       radius: 12
+      color: "#1e1e2e"
       border.color: "#313244"
       border.width: 1
+      anchors.centerIn: parent
+
+      MouseArea {
+        anchors.fill: parent
+        onClicked: {}
+      }
+
+      Item {
+        id: keyCatcher
+        anchors.fill: parent
+        focus: true
+        Keys.priority: Keys.BeforeItem
+        Keys.onPressed: function(event) {
+          if (event.key === Qt.Key_Escape) {
+            root.dismiss()
+            event.accepted = true
+          }
+        }
+      }
 
       ColumnLayout {
         anchors.fill: parent
