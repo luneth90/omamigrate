@@ -16,14 +16,21 @@ Item {
   property string currentMode: "export"
 
   // Steps:
-  // Export: 1 = Ready to export, 2 = Exported (show Send), 3 = Sent (show Done)
+  // Export: 1 = Ready, 2 = Exported (show Send), 3 = Sent (show Done)
   property int exportStep: 1
-  // Restore: 1 = Ready to restore, 2 = Restored (show Success)
+  // Restore: 1 = Ready, 2 = Restored (show Success)
   property int restoreStep: 1
 
   property bool isProcessing: false
   property string statusText: "Ready"
   property bool archiveDetected: false
+
+  // In-interface password prompt state
+  property bool showPasswordPrompt: false
+  property string inputPassword: ""
+  property string authError: ""
+  property bool authValidating: false
+  property string pendingAction: "export" // "export" | "restore"
 
   readonly property string cliPath: String(Qt.resolvedUrl("bin/omamigrate")).replace("file://", "")
 
@@ -35,10 +42,16 @@ Item {
 
   function close() {
     root.opened = false
+    root.showPasswordPrompt = false
+    root.inputPassword = ""
+    root.authError = ""
   }
 
   function dismiss() {
     root.opened = false
+    root.showPasswordPrompt = false
+    root.inputPassword = ""
+    root.authError = ""
     if (root.shell && typeof root.shell.hide === "function") {
       root.shell.hide("omamigrate")
     }
@@ -52,8 +65,49 @@ Item {
     root.exportStep = 1
     root.restoreStep = 1
     root.isProcessing = false
+    root.showPasswordPrompt = false
+    root.inputPassword = ""
+    root.authError = ""
     root.statusText = "Ready"
     root.checkArchive()
+  }
+
+  function startExport() {
+    root.showPasswordPrompt = false
+    root.isProcessing = true
+    root.statusText = "Packaging in progress..."
+    exportProcess.running = true
+  }
+
+  function startRestore() {
+    root.showPasswordPrompt = false
+    root.isProcessing = true
+    root.statusText = "Restoration in progress..."
+    restoreProcess.running = true
+  }
+
+  function handleExportClick() {
+    if (root.isProcessing) return
+    root.pendingAction = "export"
+    checkExportAuthProcess.running = true
+  }
+
+  function handleRestoreClick() {
+    if (root.isProcessing) return
+    root.pendingAction = "restore"
+    checkRestoreAuthProcess.running = true
+  }
+
+  function submitPassword() {
+    if (root.authValidating) return
+    if (root.inputPassword.length === 0) {
+      root.authError = "Password cannot be empty."
+      return
+    }
+    root.authValidating = true
+    root.authError = ""
+    authProcess.command = ["bash", "-c", "echo \"$0\" | sudo -S -p \"\" -v", root.inputPassword]
+    authProcess.running = true
   }
 
   PanelWindow {
@@ -81,7 +135,7 @@ Item {
     Rectangle {
       id: card
       width: 480
-      height: 350
+      height: 360
       radius: 14
       color: "#1e1e2e"
       border.color: "#313244"
@@ -100,7 +154,12 @@ Item {
         Keys.priority: Keys.BeforeItem
         Keys.onPressed: function(event) {
           if (event.key === Qt.Key_Escape) {
-            root.dismiss()
+            if (root.showPasswordPrompt) {
+              root.showPasswordPrompt = false
+              root.isProcessing = false
+            } else {
+              root.dismiss()
+            }
             event.accepted = true
           }
         }
@@ -150,6 +209,7 @@ Item {
 
         // Mode Switcher (Export / Restore)
         Rectangle {
+          visible: !root.showPasswordPrompt
           Layout.fillWidth: true
           height: 34
           radius: 8
@@ -225,9 +285,159 @@ Item {
           color: "#27273a"
         }
 
-        // Content Area: EXPORT FLOW
+        // ==========================================
+        // PASSWORD PROMPT VIEW (In-Interface Dialog)
+        // ==========================================
         ColumnLayout {
-          visible: root.currentMode === "export"
+          visible: root.showPasswordPrompt
+          Layout.fillWidth: true
+          Layout.fillHeight: true
+          spacing: 10
+
+          RowLayout {
+            Text {
+              text: "🔒 AUTHENTICATION REQUIRED"
+              font.pixelSize: 10
+              font.bold: true
+              color: "#fab387"
+            }
+            Item { Layout.fillWidth: true }
+          }
+
+          Text {
+            text: "Administrator Password"
+            font.pixelSize: 15
+            font.bold: true
+            color: "#cdd6f4"
+          }
+
+          Text {
+            text: root.pendingAction === "export"
+              ? "System password required to archive protected configs (/etc/sing-box)."
+              : "System password required to install packages and configure system services."
+            font.pixelSize: 12
+            color: "#a6adc8"
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
+          }
+
+          Item { height: 2 }
+
+          // Password Input Field
+          Rectangle {
+            Layout.fillWidth: true
+            height: 40
+            radius: 8
+            color: "#181825"
+            border.color: root.authError.length > 0 ? "#f38ba8" : (passwordInput.activeFocus ? "#89b4fa" : "#313244")
+            border.width: 1
+
+            RowLayout {
+              anchors.fill: parent
+              anchors.leftMargin: 12
+              anchors.rightMargin: 12
+              spacing: 8
+
+              Text {
+                text: "🔑"
+                font.pixelSize: 14
+              }
+
+              TextInput {
+                id: passwordInput
+                Layout.fillWidth: true
+                verticalAlignment: TextInput.AlignVCenter
+                echoMode: TextInput.Password
+                color: "#cdd6f4"
+                font.pixelSize: 14
+                clip: true
+                focus: root.showPasswordPrompt
+                text: root.inputPassword
+                onTextChanged: {
+                  root.inputPassword = text
+                  root.authError = ""
+                }
+                Keys.onReturnPressed: root.submitPassword()
+              }
+            }
+          }
+
+          // Auth Error Message
+          Text {
+            visible: root.authError.length > 0
+            text: root.authError
+            font.pixelSize: 11
+            color: "#f38ba8"
+          }
+
+          Item { Layout.fillHeight: true }
+
+          // Action Buttons
+          RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+
+            Rectangle {
+              Layout.fillWidth: true
+              height: 38
+              radius: 8
+              color: root.authValidating ? "#313244" : (unlockMouse.pressed ? "#74c7ec" : unlockMouse.containsMouse ? "#b4befe" : "#89b4fa")
+
+              Text {
+                anchors.centerIn: parent
+                text: root.authValidating ? "Verifying..." : "Unlock & Proceed"
+                font.pixelSize: 13
+                font.bold: true
+                color: root.authValidating ? "#6c7086" : "#11111b"
+              }
+
+              MouseArea {
+                id: unlockMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: root.authValidating ? Qt.ArrowCursor : Qt.PointingHandCursor
+                onClicked: root.submitPassword()
+              }
+            }
+
+            Rectangle {
+              width: root.pendingAction === "export" ? 140 : 80
+              height: 38
+              radius: 8
+              color: "transparent"
+              border.color: "#313244"
+              border.width: 1
+
+              Text {
+                anchors.centerIn: parent
+                text: root.pendingAction === "export" ? "Skip System Files" : "Cancel"
+                font.pixelSize: 12
+                color: "#a6adc8"
+              }
+
+              MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                  if (root.pendingAction === "export") {
+                    root.showPasswordPrompt = false
+                    root.startExport()
+                  } else {
+                    root.showPasswordPrompt = false
+                    root.isProcessing = false
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // ==========================================
+        // EXPORT FLOW
+        // ==========================================
+        ColumnLayout {
+          visible: !root.showPasswordPrompt && root.currentMode === "export"
           Layout.fillWidth: true
           Layout.fillHeight: true
           spacing: 10
@@ -256,7 +466,7 @@ Item {
             }
 
             Text {
-              text: "Includes apps, system services, configs, and AI developer credentials."
+              text: "Includes installed apps, daemons, configs, and AI developer credentials."
               font.pixelSize: 12
               color: "#a6adc8"
               wrapMode: Text.WordWrap
@@ -265,31 +475,80 @@ Item {
 
             Item { height: 2 }
 
+            // Prominent Packaging In Progress Line (shown when active)
             Rectangle {
+              visible: root.isProcessing
+              Layout.fillWidth: true
+              height: 46
+              radius: 8
+              color: "#182238"
+              border.color: "#89b4fa"
+              border.width: 1
+
+              RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 12
+                anchors.rightMargin: 12
+                spacing: 10
+
+                Rectangle {
+                  width: 10
+                  height: 10
+                  radius: 5
+                  color: "#89b4fa"
+
+                  SequentialAnimation on opacity {
+                    running: root.isProcessing
+                    loops: Animation.Infinite
+                    NumberAnimation { to: 0.3; duration: 600; easing.type: Easing.InOutQuad }
+                    NumberAnimation { to: 1.0; duration: 600; easing.type: Easing.InOutQuad }
+                  }
+                }
+
+                ColumnLayout {
+                  Layout.fillWidth: true
+                  spacing: 1
+
+                  Text {
+                    text: "Packaging in progress..."
+                    font.pixelSize: 13
+                    font.bold: true
+                    color: "#89b4fa"
+                  }
+
+                  Text {
+                    Layout.fillWidth: true
+                    text: root.statusText
+                    font.pixelSize: 11
+                    color: "#a6adc8"
+                    elide: Text.ElideRight
+                  }
+                }
+              }
+            }
+
+            // Create Backup Button (shown when idle)
+            Rectangle {
+              visible: !root.isProcessing
               Layout.fillWidth: true
               height: 40
               radius: 8
-              color: root.isProcessing ? "#313244" : (exportBtnMouse.pressed ? "#74c7ec" : exportBtnMouse.containsMouse ? "#b4befe" : "#89b4fa")
+              color: exportBtnMouse.pressed ? "#74c7ec" : exportBtnMouse.containsMouse ? "#b4befe" : "#89b4fa"
 
               Text {
                 anchors.centerIn: parent
-                text: root.isProcessing ? "Archiving in background..." : "📦 Create Backup"
+                text: "📦 Create Backup"
                 font.pixelSize: 13
                 font.bold: true
-                color: root.isProcessing ? "#a6adc8" : "#11111b"
+                color: "#11111b"
               }
 
               MouseArea {
                 id: exportBtnMouse
                 anchors.fill: parent
                 hoverEnabled: true
-                cursorShape: root.isProcessing ? Qt.ArrowCursor : Qt.PointingHandCursor
-                onClicked: {
-                  if (root.isProcessing) return
-                  root.isProcessing = true
-                  root.statusText = "Starting export..."
-                  exportProcess.running = true
-                }
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.handleExportClick()
               }
             }
           }
@@ -443,9 +702,11 @@ Item {
           Item { Layout.fillHeight: true }
         }
 
-        // Content Area: RESTORE FLOW
+        // ==========================================
+        // RESTORE FLOW
+        // ==========================================
         ColumnLayout {
-          visible: root.currentMode === "restore"
+          visible: !root.showPasswordPrompt && root.currentMode === "restore"
           Layout.fillWidth: true
           Layout.fillHeight: true
           spacing: 10
@@ -501,31 +762,80 @@ Item {
 
             Item { height: 2 }
 
+            // Prominent Restoring In Progress Line (shown when active)
             Rectangle {
+              visible: root.isProcessing
+              Layout.fillWidth: true
+              height: 46
+              radius: 8
+              color: "#281b33"
+              border.color: "#cba6f7"
+              border.width: 1
+
+              RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 12
+                anchors.rightMargin: 12
+                spacing: 10
+
+                Rectangle {
+                  width: 10
+                  height: 10
+                  radius: 5
+                  color: "#cba6f7"
+
+                  SequentialAnimation on opacity {
+                    running: root.isProcessing
+                    loops: Animation.Infinite
+                    NumberAnimation { to: 0.3; duration: 600; easing.type: Easing.InOutQuad }
+                    NumberAnimation { to: 1.0; duration: 600; easing.type: Easing.InOutQuad }
+                  }
+                }
+
+                ColumnLayout {
+                  Layout.fillWidth: true
+                  spacing: 1
+
+                  Text {
+                    text: "Restoration in progress..."
+                    font.pixelSize: 13
+                    font.bold: true
+                    color: "#cba6f7"
+                  }
+
+                  Text {
+                    Layout.fillWidth: true
+                    text: root.statusText
+                    font.pixelSize: 11
+                    color: "#a6adc8"
+                    elide: Text.ElideRight
+                  }
+                }
+              }
+            }
+
+            // Start Restore Button (shown when idle)
+            Rectangle {
+              visible: !root.isProcessing
               Layout.fillWidth: true
               height: 40
               radius: 8
-              color: root.isProcessing ? "#313244" : (restoreBtnMouse.pressed ? "#b4befe" : restoreBtnMouse.containsMouse ? "#cba6f7" : "#cba6f7")
+              color: restoreBtnMouse.pressed ? "#b4befe" : restoreBtnMouse.containsMouse ? "#cba6f7" : "#cba6f7"
 
               Text {
                 anchors.centerIn: parent
-                text: root.isProcessing ? "Restoring in background..." : "⚡ Start Restore"
+                text: "⚡ Start Restore"
                 font.pixelSize: 13
                 font.bold: true
-                color: root.isProcessing ? "#a6adc8" : "#11111b"
+                color: "#11111b"
               }
 
               MouseArea {
                 id: restoreBtnMouse
                 anchors.fill: parent
                 hoverEnabled: true
-                cursorShape: root.isProcessing ? Qt.ArrowCursor : Qt.PointingHandCursor
-                onClicked: {
-                  if (root.isProcessing) return
-                  root.isProcessing = true
-                  root.statusText = "Starting restoration..."
-                  restoreProcess.running = true
-                }
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.handleRestoreClick()
               }
             }
           }
@@ -611,6 +921,7 @@ Item {
 
         // Live Status Pill (Real-time output streaming from process)
         Rectangle {
+          visible: !root.showPasswordPrompt
           Layout.fillWidth: true
           height: 28
           radius: 6
@@ -658,6 +969,68 @@ Item {
   }
 
   Process {
+    id: checkExportAuthProcess
+    command: [
+      "bash", "-c",
+      "if sudo -n true 2>/dev/null; then echo 'no'; elif find /etc/sing-box /etc/mihomo /etc/v2raya /etc/xray /etc/v2ray /etc/daed -maxdepth 2 ! -readable 2>/dev/null | grep -q .; then echo 'yes'; else echo 'no'; fi"
+    ]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: function(text) {
+        if (String(text).trim() === "yes") {
+          root.inputPassword = ""
+          root.authError = ""
+          root.showPasswordPrompt = true
+          Qt.callLater(function() { passwordInput.forceActiveFocus() })
+        } else {
+          root.startExport()
+        }
+      }
+    }
+  }
+
+  Process {
+    id: checkRestoreAuthProcess
+    command: [
+      "bash", "-c",
+      "if sudo -n true 2>/dev/null; then echo 'no'; else echo 'yes'; fi"
+    ]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: function(text) {
+        if (String(text).trim() === "yes") {
+          root.inputPassword = ""
+          root.authError = ""
+          root.showPasswordPrompt = true
+          Qt.callLater(function() { passwordInput.forceActiveFocus() })
+        } else {
+          root.startRestore()
+        }
+      }
+    }
+  }
+
+  Process {
+    id: authProcess
+    onExited: function(code) {
+      root.authValidating = false
+      if (code === 0) {
+        root.showPasswordPrompt = false
+        root.authError = ""
+        if (root.pendingAction === "export") {
+          root.startExport()
+        } else if (root.pendingAction === "restore") {
+          root.startRestore()
+        }
+      } else {
+        root.authError = "Incorrect password. Please try again."
+        passwordInput.selectAll()
+        passwordInput.forceActiveFocus()
+      }
+    }
+  }
+
+  Process {
     id: exportProcess
     command: ["bash", "-c", "\"" + root.cliPath + "\" export"]
     stdout: SplitParser {
@@ -683,7 +1056,8 @@ Item {
         root.statusText = "Backup ready: ~/omarchy-migration.tar.gz"
         root.checkArchive()
       } else {
-        root.statusText = "Export cancelled or failed."
+        root.statusText = "Export finished or cancelled."
+        root.checkArchive()
       }
     }
   }
@@ -725,7 +1099,7 @@ Item {
         root.restoreStep = 2
         root.statusText = "Restoration completed successfully!"
       } else {
-        root.statusText = "Restore finished or cancelled."
+        root.statusText = "Restore finished with issues."
       }
     }
   }

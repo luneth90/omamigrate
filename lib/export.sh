@@ -141,12 +141,14 @@ if [ "${#unreadable_paths[@]}" -gt 0 ]; then
     tar_args+=("${p#/}")
   done
 
-  if [ -t 0 ]; then
+  if sudo -n true 2>/dev/null; then
+    ELEVATOR="sudo -n"
+  elif [ -t 0 ]; then
     ELEVATOR="sudo"
   elif command -v pkexec >/dev/null 2>&1; then
     ELEVATOR="pkexec"
   else
-    ELEVATOR="sudo"
+    ELEVATOR="sudo -n"
   fi
 
   msg_step "Requesting elevation (${ELEVATOR}) to archive protected configs..."
