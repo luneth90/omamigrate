@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
+import QtQuick.Dialogs
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -27,6 +28,7 @@ Item {
   property bool lockWarningActive: false
   property string selectedArchive: ""
   property var archiveFiles: []
+  property string archiveScanError: ""
 
   onIsProcessingChanged: {
     if (root.isProcessing) {
@@ -55,6 +57,7 @@ Item {
   property string pendingAction: "export" // "export" | "restore"
 
   readonly property string cliPath: String(Qt.resolvedUrl("bin/omamigrate")).replace("file://", "")
+  readonly property string archiveScannerPath: String(Qt.resolvedUrl("lib/scan-archives.sh")).replace("file://", "")
 
   function open(payloadJson) {
     root.opened = true
@@ -90,7 +93,34 @@ Item {
   }
 
   function scanArchives() {
+    if (scanArchiveProcess.running) return
+    root.archiveScanError = ""
     scanArchiveProcess.running = true
+  }
+
+  function localPathFromUrl(fileUrl) {
+    var value = String(fileUrl)
+    if (value.indexOf("file://") === 0) value = value.substring(7)
+    return decodeURIComponent(value)
+  }
+
+  function selectArchive(fileUrl) {
+    var path = root.localPathFromUrl(fileUrl)
+    if (!path) return
+
+    root.selectedArchive = path
+    var alreadyListed = root.archiveFiles.some(function(file) { return file.path === path })
+    if (!alreadyListed) {
+      var parts = path.split("/")
+      var updated = root.archiveFiles.slice()
+      updated.unshift({
+        "name": parts[parts.length - 1],
+        "path": path,
+        "size": "Chosen manually",
+        "date": ""
+      })
+      root.archiveFiles = updated
+    }
   }
 
   function resetFlow() {
@@ -178,6 +208,17 @@ Item {
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: root.opened ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
     exclusionMode: ExclusionMode.Ignore
+
+    FileDialog {
+      id: archiveFileDialog
+      title: "Select migration archive"
+      fileMode: FileDialog.OpenFile
+      // Keep the chooser inside the overlay so it stays visible and clickable.
+      options: FileDialog.DontUseNativeDialog
+      nameFilters: ["Migration archives (*.tar.gz *.tgz)", "All files (*)"]
+      currentFolder: "file://" + String(Quickshell.env("HOME"))
+      onAccepted: root.selectArchive(selectedFile)
+    }
 
     // Background scrim
     Rectangle {
@@ -1092,6 +1133,21 @@ Item {
                 color: "#cba6f7"
               }
               Item { Layout.fillWidth: true }
+              // Open a file chooser for archives stored outside Downloads.
+              Text {
+                visible: !root.isProcessing
+                text: "📂 Browse"
+                font.pixelSize: 10
+                color: browseArchiveMouse.containsMouse ? "#cdd6f4" : "#6c7086"
+                MouseArea {
+                  id: browseArchiveMouse
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: archiveFileDialog.open()
+                }
+              }
+              Item { width: 8 }
               // Refresh button
               Text {
                 visible: !root.isProcessing
@@ -1206,16 +1262,42 @@ Item {
 
                   Text {
                     Layout.alignment: Qt.AlignHCenter
-                    text: "No archives found in ~/Downloads"
+                    text: root.archiveScanError || "No migration archives found"
                     font.pixelSize: 12
-                    color: "#6c7086"
+                    color: root.archiveScanError ? "#f38ba8" : "#6c7086"
                   }
 
                   Text {
                     Layout.alignment: Qt.AlignHCenter
-                    text: "Transfer an omarchy-migration.tar.gz file first"
+                    text: "Transfer a .tar.gz file or click Browse"
                     font.pixelSize: 10
                     color: "#585b70"
+                  }
+
+                  Rectangle {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.preferredWidth: 132
+                    Layout.preferredHeight: 30
+                    radius: 6
+                    color: emptyBrowseMouse.pressed ? "#45475a" : (emptyBrowseMouse.containsMouse ? "#313244" : "#242438")
+                    border.color: "#45475a"
+                    border.width: 1
+
+                    Text {
+                      anchors.centerIn: parent
+                      text: "📂 Open file picker"
+                      font.pixelSize: 10
+                      font.bold: true
+                      color: "#cdd6f4"
+                    }
+
+                    MouseArea {
+                      id: emptyBrowseMouse
+                      anchors.fill: parent
+                      hoverEnabled: true
+                      cursorShape: Qt.PointingHandCursor
+                      onClicked: archiveFileDialog.open()
+                    }
                   }
 
                   Item { Layout.fillHeight: true }
@@ -1290,7 +1372,7 @@ Item {
 
                             Text {
                               Layout.fillWidth: true
-                              text: modelData.size + "  ·  " + modelData.date
+                              text: modelData.date ? modelData.size + "  ·  " + modelData.date : modelData.size
                               font.pixelSize: 9
                               color: "#585b70"
                             }
@@ -1521,29 +1603,13 @@ Item {
 
   Process {
     id: scanArchiveProcess
-    command: [
-      "bash", "-c",
-      "files=();\n" +
-      "while IFS= read -r -d '' f; do\n" +
-      "  files+=(\"$f\");\n" +
-      "done < <(find \"$HOME/Downloads\" -maxdepth 2 -type f -name '*.tar.gz' -print0 2>/dev/null | sort -z);\n" +
-      "echo '[';\n" +
-      "for i in \"${!files[@]}\"; do\n" +
-      "  f=\"${files[$i]}\";\n" +
-      "  name=$(basename \"$f\");\n" +
-      "  size=$(du -h \"$f\" 2>/dev/null | cut -f1);\n" +
-      "  ts=$(stat -c '%Y' \"$f\" 2>/dev/null || echo 0);\n" +
-      "  datestr=$(date -d @\"$ts\" '+%m/%d %H:%M' 2>/dev/null || echo 'unknown');\n" +
-      "  [ \"$i\" -gt 0 ] && printf ',';\n" +
-      "  printf '{\"name\":\"%s\",\"path\":\"%s\",\"size\":\"%s\",\"date\":\"%s\"}' \"$name\" \"$f\" \"$size\" \"$datestr\";\n" +
-      "done;\n" +
-      "echo ']';\n"
-    ]
+    command: [root.archiveScannerPath]
     stdout: StdioCollector {
+      id: archiveScanOutput
       waitForEnd: true
-      onStreamFinished: function(text) {
+      onStreamFinished: {
         try {
-          var list = JSON.parse(String(text).trim())
+          var list = JSON.parse(String(archiveScanOutput.text).trim())
           root.archiveFiles = list
           // Auto-select if only one archive, or if current selection is stale
           if (list.length === 1) {
@@ -1555,8 +1621,12 @@ Item {
         } catch(e) {
           root.archiveFiles = []
           root.selectedArchive = ""
+          root.archiveScanError = "Could not read archive list"
         }
       }
+    }
+    onExited: function(code) {
+      if (code !== 0) root.archiveScanError = "Archive scan failed (code " + code + ")"
     }
   }
 
@@ -1567,9 +1637,10 @@ Item {
       "if sudo -n true 2>/dev/null; then echo 'no'; elif find /etc/sing-box /etc/mihomo /etc/v2raya /etc/xray /etc/v2ray /etc/daed -maxdepth 2 ! -readable 2>/dev/null | grep -q .; then echo 'yes'; else echo 'no'; fi"
     ]
     stdout: StdioCollector {
+      id: exportAuthOutput
       waitForEnd: true
-      onStreamFinished: function(text) {
-        if (String(text).trim() === "yes") {
+      onStreamFinished: {
+        if (String(exportAuthOutput.text).trim() === "yes") {
           root.inputPassword = ""
           root.authError = ""
           root.showPasswordPrompt = true
@@ -1588,9 +1659,10 @@ Item {
       "if sudo -n true 2>/dev/null; then echo 'no'; else echo 'yes'; fi"
     ]
     stdout: StdioCollector {
+      id: restoreAuthOutput
       waitForEnd: true
-      onStreamFinished: function(text) {
-        if (String(text).trim() === "yes") {
+      onStreamFinished: {
+        if (String(restoreAuthOutput.text).trim() === "yes") {
           root.inputPassword = ""
           root.authError = ""
           root.showPasswordPrompt = true
