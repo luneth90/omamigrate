@@ -137,6 +137,7 @@ Press `SUPER + CTRL + M` anywhere on your Omarchy desktop to summon the OmaMigra
 
 1. **📦 Step 1: Export & Package System**
    - Click the first button to filter hardware drivers, capture packages, dotfiles, services, and credentials into `~/omarchy-migration.tar.gz`.
+   - **Smart Lightweight Mode & Toggle**: By default, OmaMigrate creates a streamlined archive (~25MB) preserving all apps, configs, and zero-login credentials. Check **"Include full AI chat histories & plugins"** if you wish to transfer hundreds of megabytes of past LLM conversation logs and plugins (~650MB+).
 2. **📡 Step 2: Beam via LocalSend**
    - Click the second button to launch LocalSend and wireless beam the package directly to `~/Downloads` on your new computer.
 3. **⚡ Step 3: One-Click Restore on New Machine**
@@ -157,8 +158,11 @@ cd ~/omarchy-restore && ./restore.sh
 OmaMigrate also ships with a fully featured CLI for headless or script-driven environments:
 
 ```bash
-# Export system ecosystem
+# Lightweight export (configs & credentials only, ~25MB, recommended)
 omamigrate export [custom-output.tar.gz]
+
+# Full export including complete AI chat histories & plugins (~650MB+)
+omamigrate export --with-history [custom-output.tar.gz]
 
 # Beam archive via LocalSend
 omamigrate send [archive-path.tar.gz]

@@ -124,6 +124,7 @@ omarchy restart shell
 
 1. **📦 步骤一：一键打包 (Export)**
    - 点击界面第 1 个按钮，自动完成显式软件清单提取、硬件黑名单过滤、配置与凭证归档；
+   - **智能轻量化与可选勾选**：默认采用极简模式（约 25MB），仅同步应用配置与免登录凭据；如需连同所有历史会话一并转移，可勾选 **「包含完整 AI 对话历史与插件」**（约 650MB+）；
    - 打包完成后在主目录生成 `~/omarchy-migration.tar.gz`。
 2. **📡 步骤二：隔空快传 (Beam via LocalSend)**
    - 点击界面第 2 个按钮直接拉起 LocalSend，将压缩包无线投送到新电脑的 `~/Downloads` 目录。
@@ -145,8 +146,11 @@ cd ~/omarchy-restore && ./restore.sh
 插件已内置了完整的 CLI 命令行接口，若您偏好在终端中纯命令行执行：
 
 ```bash
-# 一键打包
+# 默认轻量打包（仅配置与凭证，~25MB，秒传首选）
 omamigrate export [自定义输出路径.tar.gz]
+
+# 包含全量 AI 聊天历史与插件 (~650MB+)
+omamigrate export --with-history [自定义输出路径.tar.gz]
 
 # 调起 LocalSend 发送
 omamigrate send [待发送压缩包路径]

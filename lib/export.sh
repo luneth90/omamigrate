@@ -64,16 +64,57 @@ mkdir -p "${BACKUP_DIR}/user_home/.config"
 for item in "${CONFIG_TARGETS[@]}"; do
   if [ -e "$HOME/.config/$item" ]; then
     msg_step "Including config: ~/.config/${item}"
-    cp -rp "$HOME/.config/$item" "${BACKUP_DIR}/user_home/.config/"
+    if [ -d "$HOME/.config/$item" ]; then
+      rsync -a --exclude='Cache' --exclude='GPUCache' --exclude='*.asar' --exclude='*.sock' \
+        "$HOME/.config/$item" "${BACKUP_DIR}/user_home/.config/" 2>/dev/null || true
+    else
+      cp -p "$HOME/.config/$item" "${BACKUP_DIR}/user_home/.config/"
+    fi
   fi
 done
 
-# AI CLI state & configs (excluding bulky sqlite caches and logs)
+# AI CLI state & configs (Toggleable: Full vs Lightweight)
+OMAMIGRATE_FULL_AI="${OMAMIGRATE_FULL_AI:-0}"
+if [ "$OMAMIGRATE_FULL_AI" = "1" ]; then
+  msg_info "AI Backup Mode: Full (including complete chat histories, sessions & plugins)"
+  AI_EXCLUDES=(
+    "--exclude=cache"
+    "--exclude=Cache"
+    "--exclude=GPUCache"
+    "--exclude=logs"
+    "--exclude=log"
+    "--exclude=*.log"
+    "--exclude=*.sock"
+  )
+else
+  msg_info "AI Backup Mode: Lightweight (credentials & configs only, skipping large sessions/binaries)"
+  AI_EXCLUDES=(
+    "--exclude=sessions"
+    "--exclude=projects"
+    "--exclude=plugins"
+    "--exclude=bin"
+    "--exclude=conversations"
+    "--exclude=brain"
+    "--exclude=bundled"
+    "--exclude=marketplace-cache"
+    "--exclude=vendor"
+    "--exclude=.tmp"
+    "--exclude=cache"
+    "--exclude=Cache"
+    "--exclude=GPUCache"
+    "--exclude=logs"
+    "--exclude=log"
+    "--exclude=*.log"
+    "--exclude=*.sqlite*"
+    "--exclude=*.sock"
+  )
+fi
+
 for agent_dir in "${AI_AGENT_DIRS[@]}"; do
   if [ -d "$HOME/$agent_dir" ]; then
     msg_step "Including AI state: ~/${agent_dir}"
     mkdir -p "${BACKUP_DIR}/user_home/$agent_dir"
-    rsync -a --exclude='cache' --exclude='Cache' --exclude='logs' --exclude='log' --exclude='*.log' --exclude='*.sqlite*' \
+    rsync -a "${AI_EXCLUDES[@]}" \
       "$HOME/$agent_dir/" "${BACKUP_DIR}/user_home/$agent_dir/" 2>/dev/null || true
   fi
 done

@@ -24,6 +24,7 @@ Item {
   property bool isProcessing: false
   property string statusText: "Ready"
   property bool archiveDetected: false
+  property bool includeAiHistory: false
 
   // In-interface password prompt state
   property bool showPasswordPrompt: false
@@ -527,6 +528,89 @@ Item {
               }
             }
 
+            // AI Chat History Option Card
+            Rectangle {
+              visible: !root.isProcessing
+              Layout.fillWidth: true
+              height: 48
+              radius: 8
+              color: root.includeAiHistory ? "#1e1e2e" : "#181825"
+              border.color: aiHistoryMouse.containsMouse ? "#89b4fa" : (root.includeAiHistory ? "#89b4fa" : "#313244")
+              border.width: 1
+
+              RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 12
+                anchors.rightMargin: 12
+                spacing: 10
+
+                // Custom Checkbox
+                Rectangle {
+                  width: 20
+                  height: 20
+                  radius: 5
+                  color: root.includeAiHistory ? "#89b4fa" : "transparent"
+                  border.color: root.includeAiHistory ? "#89b4fa" : "#585b70"
+                  border.width: 1.5
+
+                  Text {
+                    anchors.centerIn: parent
+                    visible: root.includeAiHistory
+                    text: "✓"
+                    font.pixelSize: 13
+                    font.bold: true
+                    color: "#11111b"
+                  }
+                }
+
+                ColumnLayout {
+                  Layout.fillWidth: true
+                  spacing: 2
+
+                  RowLayout {
+                    spacing: 6
+                    Text {
+                      text: "包含完整 AI 对话历史与插件"
+                      font.pixelSize: 12
+                      font.bold: true
+                      color: root.includeAiHistory ? "#cdd6f4" : "#a6adc8"
+                    }
+                    Rectangle {
+                      height: 16
+                      width: root.includeAiHistory ? 54 : 46
+                      radius: 4
+                      color: root.includeAiHistory ? "#45475a" : "#313244"
+                      Text {
+                        anchors.centerIn: parent
+                        text: root.includeAiHistory ? "~650 MB" : "~25 MB"
+                        font.pixelSize: 9
+                        font.bold: true
+                        color: root.includeAiHistory ? "#fab387" : "#a6e3a1"
+                      }
+                    }
+                  }
+
+                  Text {
+                    text: root.includeAiHistory ? "包含 Claude/Codex/Grok/Gemini 历史会话与编译二进制" : "默认极简模式：仅保留登录凭证与配置，传输快 20 倍"
+                    font.pixelSize: 10
+                    color: "#6c7086"
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+                  }
+                }
+              }
+
+              MouseArea {
+                id: aiHistoryMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.includeAiHistory = !root.includeAiHistory
+              }
+            }
+
+            Item { height: 2; visible: !root.isProcessing }
+
             // Create Backup Button (shown when idle)
             Rectangle {
               visible: !root.isProcessing
@@ -1011,7 +1095,7 @@ Item {
 
   Process {
     id: exportProcess
-    command: ["bash", "-c", "\"" + root.cliPath + "\" export"]
+    command: ["bash", "-c", "OMAMIGRATE_FULL_AI=" + (root.includeAiHistory ? "1" : "0") + " \"" + root.cliPath + "\" export"]
     stdout: SplitParser {
       onRead: function(line) {
         var clean = String(line).replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "").trim()
