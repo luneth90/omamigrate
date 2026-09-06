@@ -22,7 +22,7 @@ jobs:
       - name: Install system dependencies
         run: |
           pacman -Sy --noconfirm archlinux-keyring
-          pacman -S --noconfirm --needed git jq ripgrep qt6-declarative qt6-base quickshell bash coreutils util-linux python python-pip
+          pacman -S --noconfirm --needed git jq ripgrep rsync qt6-declarative qt6-base quickshell bash coreutils util-linux python python-pip
       - name: Create non-root test user
         run: |
           useradd -m -u 1001 runner

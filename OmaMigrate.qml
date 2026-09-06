@@ -124,7 +124,8 @@ Item {
       "bash", "-c",
       "PASS=\"$0\"\n" +
       "if [ -n \"$PASS\" ]; then echo \"$PASS\" | sudo -S -p \"\" -v 2>/dev/null || true; fi\n" +
-      "OMAMIGRATE_FULL_AI=" + (root.includeAiHistory ? "1" : "0") + " OMAMIGRATE_SUDO_PASS=\"$PASS\" \"" + root.cliPath + "\" backup\n",
+      "OMAMIGRATE_FULL_AI=" + (root.includeAiHistory ? "1" : "0") +
+      " OMAMIGRATE_SUDO_PASS=\"$PASS\" \"" + root.cliPath + "\" backup\n",
       pass
     ]
     exportProcess.running = true
@@ -465,7 +466,7 @@ Item {
 
           Text {
             text: root.pendingAction === "export"
-              ? "System password required to include protected configs (/etc/sing-box) in the backup."
+              ? "System password required to include protected proxy configs and systemd units in the backup."
               : "System password required to install packages and configure system services."
             font.pixelSize: 12
             color: "#a6adc8"
@@ -553,7 +554,7 @@ Item {
             }
 
             Rectangle {
-              width: root.pendingAction === "export" ? 140 : 80
+              width: 80
               height: 38
               radius: 8
               color: "transparent"
@@ -562,7 +563,7 @@ Item {
 
               Text {
                 anchors.centerIn: parent
-                text: root.pendingAction === "export" ? "Skip System Files" : "Cancel"
+                text: "Cancel"
                 font.pixelSize: 12
                 color: "#a6adc8"
               }
@@ -572,13 +573,10 @@ Item {
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
-                  if (root.pendingAction === "export") {
-                    root.showPasswordPrompt = false
-                    root.startExport()
-                  } else {
-                    root.showPasswordPrompt = false
-                    root.isProcessing = false
-                  }
+                  root.showPasswordPrompt = false
+                  root.inputPassword = ""
+                  root.authError = ""
+                  root.isProcessing = false
                 }
               }
             }

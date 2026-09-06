@@ -30,7 +30,7 @@
 传统的点对点配置同步工具（如基于 Git 的 UI 插件）通常只能同步基础的用户配置文件（`~/.config/hypr`）。当您拿到一台新电脑时，依然面临繁重的手动配置成本：
 - 手动重新安装几十个 GUI 桌面软件与开发应用；
 - 手动重新配置主流代理服务（**sing-box**、**Mihomo / Clash Verge**、**v2rayA**、**daed** 等）及定时器；
-- 手动重新登录所有的 **AI 命令行工具**（Claude Code、OpenAI Codex、Antigravity `agy`、xAI Grok）；
+- 手动重新登录所有的 **AI 命令行工具**（Claude Code、OpenAI Codex、Agy CLI、Pi、OMP、OpenCode、xAI Grok）；
 - **邮件与定时自动化服务** 因缺少 GPG 密钥、`pass` 密码库或用户 systemd 定时器而无法工作；
 - 新老电脑用户名不同（如从 `alice` 变成 `bob`）时，因配置中残留的绝对路径报错。
 
@@ -41,7 +41,7 @@
   ├── 显式应用清单 (自动过滤硬件驱动)                     ├── 差异化静默补齐安装 (yay/pacman)
   ├── 代理生态 (sing-box/Mihomo/Clash/v2rayA/daed) === LocalSend 局域网直传 ===> ├── 还原系统服务并自启定时器
   ├── 邮件客户端配置、GPG与pass密码库     迁移归档包 (tar)    ├── 还原 GPG 密钥与密码库
-  ├── AI 凭据与 Session (Claude/Codex/Agy)                 ├── 恢复 AI 凭据与会话
+  ├── AI 会话 (Claude/Codex/Agy/Pi/OMP/OpenCode/Grok)      ├── 恢复 AI 凭据与会话
   └── 桌面环境与终端配置                                  └── 自动纠偏用户名路径并热重载
 ```
 
@@ -84,13 +84,21 @@
 ### 4. AI 凭据、会话与系统 Keyring 迁移
 - **Linux 桌面 Secret Service 密钥库完整同步**：
   - 自动备份与还原 **Linux 系统 Keyring** (`~/.local/share/keyrings/`)，完整包含 **Google Antigravity (`agy`)**、**VS Code**、**GitHub CLI** 与 Chrome 等应用在 Secret Service 中托管的 OAuth Token 与机密。
-- **主流 AI 开发工具登录态与 Session 全量迁移**：
-  - **Google Antigravity (`agy`)** (`~/.gemini/antigravity-cli/` 及系统 Keyring)
+- **主流 AI CLI 状态迁移**：
+  - **Agy CLI (`agy`)** (`~/.gemini/antigravity-cli/` 及系统 Keyring)
   - **OpenAI Codex** (`~/.codex/auth.json`, `~/.codex/config.toml`)
   - **Claude Code** (`~/.claude.json`, `~/.claude/`)
+  - **Pi** (`~/.pi/`)
+  - **Oh My Pi / OMP**（`~/.omp/`、命名 profile、XDG 与 `PI_CODING_AGENT_DIR` 路径）
+  - **OpenCode**（`~/.config/opencode/`、`~/.local/share/opencode/`、`~/.local/state/opencode/`、XDG 与 `OPENCODE_DB` 路径）
   - **xAI Grok** (`~/.grok/auth.json`)
   - **GitHub CLI (`gh`)** (`~/.config/gh/hosts.yml`)
+- **Standard 与 Complete**：Standard 采用严格的配置/凭据白名单，不包含历史和插件；Complete 额外迁移会话、记忆、技能/插件，并对 SQLite 数据库生成事务一致快照和完整性清单。
+- Complete 恢复时若检测到受支持的 AI CLI 仍在运行会直接停止，避免覆盖活跃的 SQLite/WAL 或 JSONL；恢复还会清理陈旧运行锁，并只转换结构化项目路径，不改写提示词和回复正文。
 - 当已保存的令牌仍然有效且恢复后的 Keyring 能够解锁时，受支持的工具可继续使用原登录状态；部分服务或应用仍可能要求重新认证。
+
+> [!NOTE]
+> AI 历史会话会被迁移，但项目源码目录不会因此自动进入恢复包。请同时恢复或重新克隆对应 workspace；否则会话文字仍可恢复，但其中引用的项目文件不可用。
 
 > [!TIP]
 > **最佳实践建议（系统登录密码）**：
@@ -99,7 +107,7 @@
 > - **若新电脑设置了不同密码**：首次启动 `agy` 或 VS Code 时，桌面会弹窗提示一次“输入密码以解锁登录密钥环”，输入老电脑的原密码即可解密；后续可通过系统密钥管理工具（如 `seahorse`）将密钥环密码同步为新密码。
 
 ### 5. 跨用户名绝对路径智能自适应
-- 如果老机器用户名是 `alice`，新机器用户名是 `bob`，还原引擎会自动检测并批量将配置文件（`.codex`, `.claude.json`, `antigravity-cli`, `git/config`）中的硬编码旧路径动态替换为新主机的 `$HOME`。
+- 如果老机器用户名是 `alice`，新机器用户名是 `bob`，还原引擎会转换 Codex、Claude、Agy CLI、Pi、OMP、OpenCode、Grok、Git 等配置及结构化会话索引中的已知绝对路径。
 
 ### 6. 可重复执行、高容错的还原引擎
 - **拦截 root 误触**：开头严格检测并拒绝以 `sudo` 运行，防止把家目录文件所有权污染为 `root:root`。
@@ -138,7 +146,7 @@ omarchy restart shell
 
 1. **📦 步骤一：创建迁移备份 (Backup)**
    - 点击界面第 1 个按钮，自动完成显式软件清单提取、硬件黑名单过滤、配置与凭证归档；
-   - 选择 **Standard**（推荐）迁移应用、AI 凭据、代理服务及配置；选择 **Complete** 可额外包含 AI 对话历史、会话和插件，备份可能较大，具体取决于本地数据量；
+   - 选择 **Standard**（推荐）迁移应用、AI 凭据、代理服务及配置；选择 **Complete** 可额外包含 AI 对话历史、会话、记忆和插件。恢复 Complete 包前需关闭受支持的 AI CLI；备份大小取决于本地数据量；
    - 打包完成后在主目录生成 `~/omamigrate-backup.tar.gz`。
 2. **📡 步骤二：本地设备直传**
    - 在 LocalSend 中打开恢复包，再选择附近的目标设备，通过局域网直接传输，不经过云端存储；接收设备通常会将文件保存到 `~/Downloads`。

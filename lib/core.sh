@@ -55,21 +55,13 @@ CONFIG_TARGETS=(
   "clash-verge-rev"
   "clash-nyanpasu"
   "mihomo"
+  "mihoro.toml"
   "mihomo-party"
   "flclash"
   "nekoray"
   "Matsuri"
   "v2raya"
   "sing-box"
-)
-
-# AI Agents directories to backup from ~/
-AI_AGENT_DIRS=(
-  ".claude"
-  ".codex"
-  ".gemini"
-  ".pi"
-  ".grok"
 )
 
 # System-level proxy directories in /etc to backup if present
@@ -109,4 +101,5 @@ CORE_DEPENDENCIES=(
   "fcitx5-configtool"
   "jq"
   "curl"
+  "rsync"
 )
