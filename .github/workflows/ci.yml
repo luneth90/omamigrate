@@ -22,7 +22,7 @@ jobs:
       - name: Install system dependencies
         run: |
           pacman -Sy --noconfirm archlinux-keyring
-          pacman -S --noconfirm --needed git jq ripgrep qt6-declarative qt6-base quickshell bash coreutils util-linux
+          pacman -S --noconfirm --needed git jq ripgrep qt6-declarative qt6-base quickshell bash coreutils util-linux python python-pip
       - name: Create non-root test user
         run: |
           useradd -m -u 1001 runner
@@ -32,6 +32,10 @@ jobs:
       - name: Setup permissions
         run: |
           chown -R runner:runner "$GITHUB_WORKSPACE"
+      - name: Install pinned fuzzing dependency as test user
+        run: |
+          su runner -c "python3 -m venv .venv"
+          su runner -c ".venv/bin/python -m pip install --require-hashes --only-binary=:all: --no-cache-dir -r requirements-dev.txt"
       - name: Validate Plugin Manifest
         run: |
           jq -e '.schemaVersion == 1' manifest.json
@@ -43,6 +47,9 @@ jobs:
       - name: Run Test Suite
         run: |
           su runner -c "./tests/test_syntax.sh"
+      - name: Atheris Parser Fuzzing Smoke Test
+        run: |
+          su runner -c ".venv/bin/python tests/fuzz_migration.py -runs=1000"
       - name: Lint QML Components
         run: |
           su runner -c "/usr/lib/qt6/bin/qmllint -I /usr/lib/qt6/qml OmaMigrate.qml"

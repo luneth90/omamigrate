@@ -12,6 +12,17 @@ for script in "${ROOT_DIR}/bin/omamigrate" "${ROOT_DIR}/lib/"*.sh; do
   echo "OK"
 done
 
+echo "==> Validating Python syntax..."
+if command -v python3 >/dev/null 2>&1; then
+  for pyscript in "${ROOT_DIR}/tests/"*.py; do
+    if [[ -f "$pyscript" ]]; then
+      echo -n "Checking ${pyscript}... "
+      python3 -m py_compile "$pyscript"
+      echo "OK"
+    fi
+  done
+fi
+
 echo "==> Checking executables..."
 test -x "${ROOT_DIR}/bin/omamigrate"
 test -x "${ROOT_DIR}/lib/export.sh"
