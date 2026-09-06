@@ -115,7 +115,7 @@ Whether you prefer background daemons or modern GUI desktop clients, OmaMigrate 
 Install and enable OmaMigrate directly using Omarchy's official plugin manager:
 
 ```bash
-omarchy plugin add https://github.com/<your-username>/omamigrate.git --enable
+omarchy plugin add https://github.com/luneth90/omamigrate.git --enable
 ```
 
 *Lifecycle management commands:*

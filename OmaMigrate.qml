@@ -918,39 +918,6 @@ Item {
 
           Item { Layout.fillHeight: true }
         }
-
-        // Live Status Pill (Real-time output streaming from process)
-        Rectangle {
-          visible: !root.showPasswordPrompt
-          Layout.fillWidth: true
-          height: 28
-          radius: 6
-          color: "#181825"
-          border.color: root.isProcessing ? "#89b4fa" : "#313244"
-          border.width: 1
-
-          RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: 10
-            anchors.rightMargin: 10
-            spacing: 8
-
-            Rectangle {
-              width: 6
-              height: 6
-              radius: 3
-              color: root.isProcessing ? "#89b4fa" : (root.statusText.indexOf("✓") !== -1 ? "#a6e3a1" : "#6c7086")
-            }
-
-            Text {
-              Layout.fillWidth: true
-              text: root.statusText
-              font.pixelSize: 11
-              color: root.isProcessing ? "#cdd6f4" : "#a6adc8"
-              elide: Text.ElideRight
-            }
-          }
-        }
       }
     }
   }

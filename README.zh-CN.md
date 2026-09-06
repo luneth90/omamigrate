@@ -102,7 +102,7 @@
 在终端运行 Omarchy 官方插件管理指令，自动克隆并启用：
 
 ```bash
-omarchy plugin add https://github.com/<your-username>/omamigrate.git --enable
+omarchy plugin add https://github.com/luneth90/omamigrate.git --enable
 ```
 
 *日常管理指令：*
