@@ -8,9 +8,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/core.sh"
 
 OUTPUT_FILE="${1:-$HOME/omarchy-migration.tar.gz}"
-BACKUP_DIR="$(mktemp -d -t omamigrate-XXXXXX)"
 
-trap 'rm -rf "${BACKUP_DIR}"' EXIT
+STAGING_BASE="${XDG_CACHE_HOME:-$HOME/.cache}/omamigrate"
+mkdir -p "$STAGING_BASE"
+chmod 700 "$STAGING_BASE"
+rm -rf "${STAGING_BASE}/export-"* 2>/dev/null || true
+
+BACKUP_DIR="$(mktemp -d "${STAGING_BASE}/export-XXXXXX")"
+trap 'rm -rf "${BACKUP_DIR:-}"' EXIT INT TERM
 
 msg_info "Starting OmaMigrate Export..."
 msg_step "Creating staging directory: ${BACKUP_DIR}"

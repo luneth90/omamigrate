@@ -29,12 +29,21 @@ CURRENT_USER="$(id -un)"
 CURRENT_HOME="$HOME"
 
 # Define privilege elevator
-if [ -t 0 ]; then
+if sudo -n true 2>/dev/null; then
+  ELEVATOR="sudo -n"
+elif [ -t 0 ]; then
   ELEVATOR="sudo"
 elif command -v pkexec >/dev/null 2>&1; then
   ELEVATOR="pkexec"
 else
-  ELEVATOR="sudo"
+  ELEVATOR="sudo -n"
+fi
+
+# Keep sudo credentials alive in background if authenticated
+if sudo -n true 2>/dev/null; then
+  ( while true; do sudo -n -v 2>/dev/null; sleep 30; kill -0 "$$" 2>/dev/null || exit; done ) &
+  SUDO_PID=$!
+  trap 'kill "${SUDO_PID:-}" 2>/dev/null || true' EXIT INT TERM
 fi
 
 msg_info "Starting OmaMigrate Ecosystem Restoration..."
@@ -162,15 +171,15 @@ if [ -f "$PKG_FILE" ]; then
     msg_step "Found ${#MISSING_PKGS[@]} missing packages to install..."
     if command -v yay >/dev/null 2>&1; then
       msg_step "Installing missing packages with yay..."
-      yay -S --needed --noconfirm "${MISSING_PKGS[@]}" || {
+      yay -S --needed --noconfirm --answerclean None --answerdiff None --answeredit None "${MISSING_PKGS[@]}" || {
         msg_warn "Some packages timed out. You can retry later."
       }
     elif command -v omarchy >/dev/null 2>&1; then
       msg_step "Installing missing packages with omarchy pkg..."
-      omarchy pkg add "${MISSING_PKGS[@]}" || sudo pacman -S --needed --noconfirm "${MISSING_PKGS[@]}" || true
+      omarchy pkg add "${MISSING_PKGS[@]}" || $ELEVATOR pacman -S --needed --noconfirm "${MISSING_PKGS[@]}" || true
     else
       msg_step "Installing missing packages with pacman..."
-      sudo pacman -S --needed --noconfirm "${MISSING_PKGS[@]}" || true
+      $ELEVATOR pacman -S --needed --noconfirm "${MISSING_PKGS[@]}" || true
     fi
   else
     msg_ok "All required packages are already installed."
@@ -191,9 +200,9 @@ done
 if [ ${#CORE_MISSING[@]} -gt 0 ]; then
   msg_step "Installing missing core dependencies: ${CORE_MISSING[*]}"
   if command -v yay >/dev/null 2>&1; then
-    yay -S --needed --noconfirm "${CORE_MISSING[@]}" || true
+    yay -S --needed --noconfirm --answerclean None --answerdiff None --answeredit None "${CORE_MISSING[@]}" || true
   else
-    sudo pacman -S --needed --noconfirm "${CORE_MISSING[@]}" || true
+    $ELEVATOR pacman -S --needed --noconfirm "${CORE_MISSING[@]}" || true
   fi
 fi
 msg_ok "Package dependencies verified."

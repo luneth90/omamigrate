@@ -41,6 +41,8 @@ cmd_export() {
   bash "${LIB_DIR}/export.sh" "$target"
 }
 
+RESTORE_DIR=""
+
 cmd_restore() {
   local archive="${1:-}"
   if [ -z "$archive" ] || [ ! -f "$archive" ]; then
@@ -49,26 +51,33 @@ cmd_restore() {
     exit 1
   fi
 
-  local restore_dir
-  restore_dir="$(mktemp -d -t omamigrate-restore-XXXXXX)"
-  trap 'rm -rf "${restore_dir}"' EXIT
+  local staging_base="${XDG_CACHE_HOME:-$HOME/.cache}/omamigrate"
+  mkdir -p "$staging_base"
+  chmod 700 "$staging_base"
+  rm -rf "${staging_base}/restore-"* 2>/dev/null || true
+
+  RESTORE_DIR="$(mktemp -d "${staging_base}/restore-XXXXXX")"
+  trap 'rm -rf "${RESTORE_DIR:-}"' EXIT INT TERM
 
   msg_info "Extracting migration bundle from $(basename "$archive")..."
   msg_step "Extracting staging contents..."
-  tar -xzf "$archive" -C "$restore_dir"
+  if ! tar -xzf "$archive" -C "$RESTORE_DIR"; then
+    msg_error "Failed to extract archive contents. Ensure sufficient disk space."
+    exit 1
+  fi
   msg_ok "Migration bundle extracted."
 
   local restore_engine=""
   if [ -f "${LIB_DIR}/restore.sh" ]; then
     restore_engine="${LIB_DIR}/restore.sh"
-  elif [ -f "${restore_dir}/restore.sh" ]; then
-    chmod +x "${restore_dir}/restore.sh"
-    restore_engine="${restore_dir}/restore.sh"
+  elif [ -f "${RESTORE_DIR}/restore.sh" ]; then
+    chmod +x "${RESTORE_DIR}/restore.sh"
+    restore_engine="${RESTORE_DIR}/restore.sh"
   fi
 
   if [ -n "$restore_engine" ]; then
     msg_info "Executing restore engine..."
-    bash "$restore_engine" "$restore_dir"
+    bash "$restore_engine" "$RESTORE_DIR"
   else
     msg_error "Invalid archive: restore.sh not found inside bundle."
     exit 1

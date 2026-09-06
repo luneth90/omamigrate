@@ -1078,7 +1078,9 @@ Item {
         root.restoreStep = 2
         root.statusText = "Restoration completed successfully!"
       } else {
-        root.statusText = "Restore finished with issues."
+        if (!root.statusText || root.statusText === "Restoration in progress...") {
+          root.statusText = "Restore exited with code " + code + ". Check logs or disk space."
+        }
       }
     }
   }
