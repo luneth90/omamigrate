@@ -228,7 +228,10 @@ mkdir -p "${CURRENT_HOME}/.config" "${CURRENT_HOME}/.local/bin"
 if [ -d "${RESTORE_DATA_DIR}/user_home" ]; then
   # Preserve the active plugin registration without ever modifying the unpacked
   # backup. Reusing an archive must produce the same input on every run.
-  if grep -q "omamigrate" "${CURRENT_HOME}/.config/omarchy/shell.json" 2>/dev/null || [ -n "${OMAMIGRATE_GUI:-}" ]; then
+  if grep -q "omamigrate" "${CURRENT_HOME}/.config/omarchy/shell.json" 2>/dev/null || \
+     [ -n "${OMAMIGRATE_GUI:-}" ] || \
+     [ -d "${CURRENT_HOME}/.config/omarchy/plugins/luneth90.omamigrate" ] || \
+     [ -n "$(find "${CURRENT_HOME}/.config/omarchy/plugins" -maxdepth 1 -name "*omamigrate*" 2>/dev/null)" ]; then
     PRESERVE_OMAMIGRATE=true
   fi
 
@@ -266,8 +269,13 @@ if [ -d "${RESTORE_DATA_DIR}/user_home" ]; then
     [ -d "${RESTORE_DATA_DIR}/user_home/$cred" ] && msg_step "Restoring credential store: ~/$cred"
   done
 
+  # CRITICAL: Exclude ~/.config/omarchy/shell.json from the bulk extraction!
+  # If shell.json is restored without luneth90.omamigrate, Quickshell's file watcher
+  # detects the removal and instantly unloads OmaMigrate, which destroys the QML window
+  # and kills the running restore process mid-flight.
   if command -v rsync >/dev/null 2>&1; then
     if ! rsync -a \
+      --exclude='.config/omarchy/shell.json' \
       --exclude='.config/omarchy/plugins/*omamigrate*' \
       --exclude='.config/*omamigrate*' \
       --exclude='.local/bin/*omamigrate*' \
@@ -277,12 +285,51 @@ if [ -d "${RESTORE_DATA_DIR}/user_home" ]; then
     fi
   else
     if ! tar -C "${RESTORE_DATA_DIR}/user_home" \
+      --exclude='./.config/omarchy/shell.json' \
+      --exclude='.config/omarchy/shell.json' \
       --exclude='./.config/omarchy/plugins/*omamigrate*' \
-      --exclude='./.config/*omamigrate*' \
+      --exclude='.config/*omamigrate*' \
       --exclude='./.local/bin/*omamigrate*' \
       --exclude='*omamigrate*' \
       -cf - . | tar -C "${CURRENT_HOME}" -xpf -; then
       record_restore_error "User configurations could not be restored completely."
+    fi
+  fi
+
+  # Restore ~/.config/omarchy/shell.json atomically:
+  # If OmaMigrate is active or present, ensure "luneth90.omamigrate" is preserved
+  # IN ADVANCE before writing to ~/.config/omarchy/shell.json.
+  if [ -f "${RESTORE_DATA_DIR}/user_home/.config/omarchy/shell.json" ]; then
+    mkdir -p "${CURRENT_HOME}/.config/omarchy"
+    TARGET_SHELL_JSON="${CURRENT_HOME}/.config/omarchy/shell.json"
+    TMP_SHELL_JSON="$(mktemp "${TARGET_SHELL_JSON}.XXXXXX" 2>/dev/null || mktemp)"
+    if [ "$PRESERVE_OMAMIGRATE" = true ] && command -v jq >/dev/null 2>&1; then
+      jq '.plugins = (.plugins // []) + (if any(.plugins[]?; (.id // "") == "luneth90.omamigrate") then [] else [{"id": "luneth90.omamigrate"}] end)' \
+        "${RESTORE_DATA_DIR}/user_home/.config/omarchy/shell.json" > "$TMP_SHELL_JSON"
+    elif [ "$PRESERVE_OMAMIGRATE" = true ] && command -v python3 >/dev/null 2>&1; then
+      python3 -c '
+import json, sys
+src, dst = sys.argv[1], sys.argv[2]
+with open(src, "r") as f:
+    d = json.load(f)
+plugins = d.get("plugins", [])
+if not any(x.get("id") == "luneth90.omamigrate" for x in plugins if isinstance(x, dict)):
+    plugins.append({"id": "luneth90.omamigrate"})
+d["plugins"] = plugins
+with open(dst, "w") as f:
+    json.dump(d, f, indent=2)
+' "${RESTORE_DATA_DIR}/user_home/.config/omarchy/shell.json" "$TMP_SHELL_JSON"
+    else
+      cp -p "${RESTORE_DATA_DIR}/user_home/.config/omarchy/shell.json" "$TMP_SHELL_JSON"
+    fi
+    if [ -f "$TARGET_SHELL_JSON" ]; then
+      chmod --reference="$TARGET_SHELL_JSON" "$TMP_SHELL_JSON" 2>/dev/null || true
+    fi
+    if mv "$TMP_SHELL_JSON" "$TARGET_SHELL_JSON"; then
+      [ "$PRESERVE_OMAMIGRATE" = true ] && msg_step "Preserved OmaMigrate plugin registration in shell.json."
+    else
+      rm -f "$TMP_SHELL_JSON"
+      record_restore_error "Could not safely restore shell.json configuration."
     fi
   fi
   if [ ${#RESTORE_ERRORS[@]} -eq 0 ]; then
