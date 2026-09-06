@@ -9,6 +9,8 @@
 [![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](CHANGELOG.md)
 [![Architecture](https://img.shields.io/badge/Arch-x86__64%20%7C%20aarch64-orange)](#hardware-agnostic-portability)
 
+![OmaMigrate backup interface](preview.png)
+
 ---
 
 ## Overview
@@ -186,7 +188,7 @@ mkdir -p ~/.local/bin && ln -s ~/.config/omarchy/plugins/luneth90.omamigrate/bin
 ### Update
 
 ```bash
-omarchy plugin update luneth90.omamigrate
+omarchy plugin update luneth90.omamigrate --yes
 ```
 
 Restart the shell if the interface does not refresh automatically:

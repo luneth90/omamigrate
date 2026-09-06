@@ -9,6 +9,8 @@
 [![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](CHANGELOG.md)
 [![Architecture](https://img.shields.io/badge/Arch-x86__64%20%7C%20aarch64-orange)](#跨硬件架构智能兼容)
 
+![OmaMigrate 备份界面](preview.png)
+
 ---
 
 ## 项目背景
@@ -174,7 +176,7 @@ mkdir -p ~/.local/bin && ln -s ~/.config/omarchy/plugins/luneth90.omamigrate/bin
 ### 更新
 
 ```bash
-omarchy plugin update luneth90.omamigrate
+omarchy plugin update luneth90.omamigrate --yes
 ```
 
 如果界面没有自动刷新，可单独重启 Shell：
