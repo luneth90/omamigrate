@@ -123,7 +123,7 @@ omarchy plugin add https://github.com/luneth90/omamigrate.git --enable
 Run this command in your terminal to append the shortcut to `~/.config/hypr/bindings.lua` and restart the shell to take effect immediately (recommended: `SUPER + CTRL + M`, non-conflicting with Omarchy system defaults):
 
 ```bash
-echo 'o.bind("SUPER + CTRL + M", "OmaMigrate", "omarchy-shell shell toggle omamigrate")' >> ~/.config/hypr/bindings.lua
+echo 'o.bind("SUPER + CTRL + M", "OmaMigrate", "omarchy-shell shell toggle luneth90.omamigrate")' >> ~/.config/hypr/bindings.lua
 omarchy restart shell
 ```
 
@@ -167,7 +167,7 @@ omamigrate send [archive-path.tar.gz]
 omamigrate restore <archive-path.tar.gz>
 ```
 
-> **💡 Note**: If you want to use the `omamigrate` command directly in your shell, symlink it to your PATH: `ln -s ~/.config/omarchy/plugins/omamigrate/bin/omamigrate ~/.local/bin/omamigrate`.
+> **💡 Note**: If you want to use the `omamigrate` command directly in your shell, symlink it to your PATH: `ln -s ~/.config/omarchy/plugins/luneth90.omamigrate/bin/omamigrate ~/.local/bin/omamigrate`.
 
 ---
 
@@ -176,11 +176,12 @@ omamigrate restore <archive-path.tar.gz>
 Lifecycle and update commands:
 
 ```bash
-# Update to latest version
-omarchy plugin update omamigrate
+# Update to latest version & reload shell
+omarchy plugin update luneth90.omamigrate
+omarchy restart shell
 
 # Uninstall plugin
-omarchy plugin remove omamigrate
+omarchy plugin remove luneth90.omamigrate
 ```
 
 ---

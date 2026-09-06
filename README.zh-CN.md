@@ -110,7 +110,7 @@ omarchy plugin add https://github.com/luneth90/omamigrate.git --enable
 在终端执行以下命令直接将快捷键追加到 `~/.config/hypr/bindings.lua`，并重启 shell 使快捷键立即生效（推荐 `SUPER + CTRL + M`，与 Omarchy 系统默认键位完美契合）：
 
 ```bash
-echo 'o.bind("SUPER + CTRL + M", "OmaMigrate", "omarchy-shell shell toggle omamigrate")' >> ~/.config/hypr/bindings.lua
+echo 'o.bind("SUPER + CTRL + M", "OmaMigrate", "omarchy-shell shell toggle luneth90.omamigrate")' >> ~/.config/hypr/bindings.lua
 omarchy restart shell
 ```
 
@@ -155,7 +155,7 @@ omamigrate send [待发送压缩包路径]
 omamigrate restore <归档包路径.tar.gz>
 ```
 
-> **💡 提示**：若希望在终端全局直接输入 `omamigrate` 命令，可建立软链接：`ln -s ~/.config/omarchy/plugins/omamigrate/bin/omamigrate ~/.local/bin/omamigrate`。
+> **💡 提示**：若希望在终端全局直接输入 `omamigrate` 命令，可建立软链接：`ln -s ~/.config/omarchy/plugins/luneth90.omamigrate/bin/omamigrate ~/.local/bin/omamigrate`。
 
 ---
 
@@ -164,11 +164,12 @@ omamigrate restore <归档包路径.tar.gz>
 日常升级与生命周期管理指令：
 
 ```bash
-# 一键更新至最新版
-omarchy plugin update omamigrate
+# 一键更新至最新版并重载 shell
+omarchy plugin update luneth90.omamigrate
+omarchy restart shell
 
 # 一键卸载
-omarchy plugin remove omamigrate
+omarchy plugin remove luneth90.omamigrate
 ```
 
 ---

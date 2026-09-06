@@ -53,7 +53,7 @@ Item {
     root.inputPassword = ""
     root.authError = ""
     if (root.shell && typeof root.shell.hide === "function") {
-      root.shell.hide("omamigrate")
+      root.shell.hide("luneth90.omamigrate")
     }
   }
 
@@ -115,7 +115,7 @@ Item {
     visible: root.opened
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
-    WlrLayershell.namespace: "omamigrate"
+    WlrLayershell.namespace: "luneth90.omamigrate"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: root.opened ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
     exclusionMode: ExclusionMode.Ignore
