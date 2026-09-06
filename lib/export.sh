@@ -252,6 +252,9 @@ if [ "${#unreadable_paths[@]}" -gt 0 ]; then
   fi
 fi
 
+# Clean up temporary, editor swap, and historical backup files from system_root
+find "${BACKUP_DIR}/system_root" -type f \( -name "*.bak" -o -name "*.bak.*" -o -name "*~" -o -name "*.tmp" \) -delete 2>/dev/null || true
+
 # 4. Embed the automated restore script
 msg_info "Embedding restore engine..."
 cp -p "${SCRIPT_DIR}/restore.sh" "${BACKUP_DIR}/restore.sh"
