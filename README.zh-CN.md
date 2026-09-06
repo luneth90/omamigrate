@@ -161,21 +161,38 @@ omamigrate restore <归档包路径.tar.gz>
 
 运行 `omamigrate --help` 可查看完整英文命令说明，或使用 `omamigrate <command> --help` 查看子命令选项。旧的 `export` 命令仍作为 `backup` 的兼容别名保留。
 
-> **💡 提示**：若希望在终端全局直接输入 `omamigrate` 命令，可建立软链接：`ln -s ~/.config/omarchy/plugins/luneth90.omamigrate/bin/omamigrate ~/.local/bin/omamigrate`。
+若希望在终端中直接使用 `omamigrate` 命令，可在 PATH 中创建软链接：
+
+```bash
+mkdir -p ~/.local/bin && ln -s ~/.config/omarchy/plugins/luneth90.omamigrate/bin/omamigrate ~/.local/bin/omamigrate
+```
 
 ---
 
 ## 升级与维护
 
-日常升级与生命周期管理指令：
+### 更新
 
 ```bash
-# 一键更新至最新版并重载 shell
 omarchy plugin update luneth90.omamigrate
-omarchy restart shell
+```
 
-# 一键卸载
+如果界面没有自动刷新，可单独重启 Shell：
+
+```bash
+omarchy restart shell
+```
+
+### 卸载
+
+```bash
 omarchy plugin remove luneth90.omamigrate
+```
+
+如果此前创建了可选的 CLI 软链接，可单独清理该链接：
+
+```bash
+test ! -L ~/.local/bin/omamigrate || unlink ~/.local/bin/omamigrate
 ```
 
 ---

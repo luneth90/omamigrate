@@ -173,21 +173,38 @@ omamigrate restore <backup-file.tar.gz>
 
 Run `omamigrate --help` for the complete command list, or `omamigrate <command> --help` for command-specific options. The legacy `export` command remains available as an alias for `backup`.
 
-> **💡 Note**: If you want to use the `omamigrate` command directly in your shell, symlink it to your PATH: `ln -s ~/.config/omarchy/plugins/luneth90.omamigrate/bin/omamigrate ~/.local/bin/omamigrate`.
+To make the `omamigrate` command available directly in your shell, create a symlink in your PATH:
+
+```bash
+mkdir -p ~/.local/bin && ln -s ~/.config/omarchy/plugins/luneth90.omamigrate/bin/omamigrate ~/.local/bin/omamigrate
+```
 
 ---
 
 ## Upgrade & Maintenance
 
-Lifecycle and update commands:
+### Update
 
 ```bash
-# Update to latest version & reload shell
 omarchy plugin update luneth90.omamigrate
-omarchy restart shell
+```
 
-# Uninstall plugin
+Restart the shell if the interface does not refresh automatically:
+
+```bash
+omarchy restart shell
+```
+
+### Remove
+
+```bash
 omarchy plugin remove luneth90.omamigrate
+```
+
+If you created the optional CLI symlink above, remove that symlink separately:
+
+```bash
+test ! -L ~/.local/bin/omamigrate || unlink ~/.local/bin/omamigrate
 ```
 
 ---
