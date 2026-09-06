@@ -91,11 +91,23 @@ mkdir -p "${CURRENT_HOME}/.config" "${CURRENT_HOME}/.local/bin"
 if [ -d "${RESTORE_DATA_DIR}/user_home" ]; then
   chmod -R u+w "${CURRENT_HOME}" 2>/dev/null || true
 
-  # CRITICAL: Strip out running OmaMigrate plugin files from extraction!
+  # CRITICAL: Strip out OmaMigrate plugin files and binaries from extraction!
   # Quickshell's file watcher hot-reloads the plugin if its files are modified,
   # which would abruptly destroy the QML window and abort restoration!
-  rm -rf "${RESTORE_DATA_DIR}/user_home/.config/omarchy/plugins/luneth90.omamigrate" \
-         "${RESTORE_DATA_DIR}/user_home/.config/omarchy/plugins/omamigrate" 2>/dev/null || true
+  rm -rf "${RESTORE_DATA_DIR}/user_home/.config/omarchy/plugins/"*omamigrate* \
+         "${RESTORE_DATA_DIR}/user_home/.config/"*omamigrate* \
+         "${RESTORE_DATA_DIR}/user_home/.local/bin/"*omamigrate* 2>/dev/null || true
+
+  # If OmaMigrate is active on the target machine, preserve its registration in restored shell.json
+  if [ -f "${RESTORE_DATA_DIR}/user_home/.config/omarchy/shell.json" ] && [ -f "${CURRENT_HOME}/.config/omarchy/shell.json" ]; then
+    if grep -q "omamigrate" "${CURRENT_HOME}/.config/omarchy/shell.json" 2>/dev/null || [ -n "${OMAMIGRATE_GUI:-}" ]; then
+      if command -v jq >/dev/null 2>&1; then
+        jq '.plugins = (.plugins // []) + (if any(.plugins[]?; (.id // "") == "luneth90.omamigrate") then [] else [{"id": "luneth90.omamigrate"}] end)' \
+          "${RESTORE_DATA_DIR}/user_home/.config/omarchy/shell.json" > "${RESTORE_DATA_DIR}/user_home/.config/omarchy/shell.json.tmp" && \
+          mv "${RESTORE_DATA_DIR}/user_home/.config/omarchy/shell.json.tmp" "${RESTORE_DATA_DIR}/user_home/.config/omarchy/shell.json"
+      fi
+    fi
+  fi
 
   if [ -d "${RESTORE_DATA_DIR}/user_home/.config" ]; then
     for cfg in "${RESTORE_DATA_DIR}/user_home/.config"/*; do
@@ -108,8 +120,10 @@ if [ -d "${RESTORE_DATA_DIR}/user_home" ]; then
 
   if command -v rsync >/dev/null 2>&1; then
     rsync -a \
-      --exclude='.config/omarchy/plugins/luneth90.omamigrate' \
-      --exclude='.config/omarchy/plugins/omamigrate' \
+      --exclude='.config/omarchy/plugins/*omamigrate*' \
+      --exclude='.config/*omamigrate*' \
+      --exclude='.local/bin/*omamigrate*' \
+      --exclude='*omamigrate*' \
       "${RESTORE_DATA_DIR}/user_home/" "${CURRENT_HOME}/"
   else
     cp -rfp "${RESTORE_DATA_DIR}/user_home/." "${CURRENT_HOME}/"

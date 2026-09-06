@@ -23,9 +23,10 @@ Item {
 
   property bool isProcessing: false
   property string statusText: "Ready"
-  property bool archiveDetected: false
   property bool includeAiHistory: false
   property bool lockWarningActive: false
+  property string selectedArchive: ""
+  property var archiveFiles: []
 
   onIsProcessingChanged: {
     if (root.isProcessing) {
@@ -57,7 +58,7 @@ Item {
 
   function open(payloadJson) {
     root.opened = true
-    root.checkArchive()
+    root.scanArchives()
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
 
@@ -88,8 +89,8 @@ Item {
     }
   }
 
-  function checkArchive() {
-    checkArchiveProcess.running = true
+  function scanArchives() {
+    scanArchiveProcess.running = true
   }
 
   function resetFlow() {
@@ -101,7 +102,8 @@ Item {
     root.savedPassword = ""
     root.authError = ""
     root.statusText = "Ready"
-    root.checkArchive()
+    root.selectedArchive = ""
+    root.scanArchives()
   }
 
   function startExport() {
@@ -122,29 +124,23 @@ Item {
   }
 
   function startRestore() {
+    if (!root.selectedArchive) {
+      root.statusText = "Error: No archive selected."
+      return
+    }
     root.showPasswordPrompt = false
     root.isProcessing = true
     root.statusText = "Restoring system..."
     var pass = root.savedPassword || root.inputPassword
     root.savedPassword = ""
     root.inputPassword = ""
+    var archive = root.selectedArchive
     restoreProcess.command = [
       "bash", "-c",
       "PASS=\"$0\"\n" +
       "if [ -n \"$PASS\" ]; then echo \"$PASS\" | sudo -S -p \"\" -v 2>/dev/null || true; fi\n" +
-      "ARCHIVE=\"\"\n" +
-      "for p in \"$HOME/Downloads/omarchy-migration.tar.gz\" \"$HOME/Downloads/LocalSend/omarchy-migration.tar.gz\" \"$HOME/omarchy-migration.tar.gz\"; do\n" +
-      "  if [ -f \"$p\" ]; then ARCHIVE=\"$p\"; break; fi\n" +
-      "done\n" +
-      "if [ -z \"$ARCHIVE\" ]; then\n" +
-      "  ARCHIVE=$(find \"$HOME/Downloads\" \"$HOME\" -maxdepth 2 -type f -name \"*migration*.tar.gz\" 2>/dev/null | head -n 1)\n" +
-      "fi\n" +
-      "if [ -z \"$ARCHIVE\" ]; then\n" +
-      "  echo \"Error: Migration archive not found in ~/Downloads or ~\" >&2\n" +
-      "  exit 1\n" +
-      "fi\n" +
-      "OMAMIGRATE_GUI=1 OMAMIGRATE_SUDO_PASS=\"$PASS\" \"" + root.cliPath + "\" restore \"$ARCHIVE\"\n",
-      pass
+      "OMAMIGRATE_GUI=1 OMAMIGRATE_SUDO_PASS=\"$PASS\" \"" + root.cliPath + "\" restore \"$1\"\n",
+      pass, archive
     ]
     restoreProcess.running = true
   }
@@ -235,7 +231,7 @@ Item {
     Rectangle {
       id: card
       width: 480
-      height: 360
+      height: root.currentMode === "restore" && !root.showPasswordPrompt ? 420 : 360
       radius: 14
       color: "#1e1e2e"
       border.color: root.lockWarningActive ? "#f38ba8" : (root.isProcessing ? (root.currentMode === "export" ? "#89b4fa" : "#cba6f7") : "#313244")
@@ -391,7 +387,6 @@ Item {
                     return
                   }
                   root.currentMode = "export"
-                  root.checkArchive()
                 }
               }
             }
@@ -421,7 +416,7 @@ Item {
                     return
                   }
                   root.currentMode = "restore"
-                  root.checkArchive()
+                  root.scanArchives()
                 }
               }
             }
@@ -1086,7 +1081,8 @@ Item {
           ColumnLayout {
             visible: root.restoreStep === 1
             Layout.fillWidth: true
-            spacing: 10
+            Layout.fillHeight: true
+            spacing: 8
 
             RowLayout {
               Text {
@@ -1096,42 +1092,34 @@ Item {
                 color: "#cba6f7"
               }
               Item { Layout.fillWidth: true }
+              // Refresh button
+              Text {
+                visible: !root.isProcessing
+                text: "🔄 Refresh"
+                font.pixelSize: 10
+                color: "#6c7086"
+                MouseArea {
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.scanArchives()
+                }
+              }
             }
 
             Text {
-              text: "Restore System Environment"
+              text: "Select Migration Archive"
               font.pixelSize: 15
               font.bold: true
               color: "#cdd6f4"
             }
 
-            // Archive detection badge
-            Rectangle {
-              Layout.fillWidth: true
-              height: 32
-              radius: 6
-              color: root.archiveDetected ? "#1c2e26" : "#2a221d"
-              border.color: root.archiveDetected ? "#2d4f3e" : "#4f3b2a"
-              border.width: 1
-
-              RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: 10
-                anchors.rightMargin: 10
-                spacing: 8
-
-                Text {
-                  text: root.archiveDetected ? "✓ Archive detected in ~/Downloads" : "⚠ Waiting for archive in ~/Downloads"
-                  font.pixelSize: 11
-                  font.bold: true
-                  color: root.archiveDetected ? "#a6e3a1" : "#fab387"
-                }
-
-                Item { Layout.fillWidth: true }
-              }
+            Text {
+              visible: !root.isProcessing
+              text: "Choose a backup archive from ~/Downloads"
+              font.pixelSize: 11
+              color: "#6c7086"
             }
-
-            Item { height: 2 }
 
             // Prominent Restoring In Progress Line (shown when active)
             Rectangle {
@@ -1186,28 +1174,172 @@ Item {
               }
             }
 
+            // Archive file list (shown when idle)
+            Rectangle {
+              visible: !root.isProcessing
+              Layout.fillWidth: true
+              Layout.fillHeight: true
+              radius: 8
+              color: "#181825"
+              border.color: "#313244"
+              border.width: 1
+              clip: true
+
+              ColumnLayout {
+                anchors.fill: parent
+                spacing: 0
+
+                // Empty state
+                ColumnLayout {
+                  visible: root.archiveFiles.length === 0
+                  Layout.fillWidth: true
+                  Layout.fillHeight: true
+                  spacing: 6
+
+                  Item { Layout.fillHeight: true }
+
+                  Text {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: "📭"
+                    font.pixelSize: 24
+                  }
+
+                  Text {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: "No archives found in ~/Downloads"
+                    font.pixelSize: 12
+                    color: "#6c7086"
+                  }
+
+                  Text {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: "Transfer an omarchy-migration.tar.gz file first"
+                    font.pixelSize: 10
+                    color: "#585b70"
+                  }
+
+                  Item { Layout.fillHeight: true }
+                }
+
+                // File list
+                Flickable {
+                  visible: root.archiveFiles.length > 0
+                  Layout.fillWidth: true
+                  Layout.fillHeight: true
+                  contentHeight: fileListCol.height
+                  clip: true
+                  boundsBehavior: Flickable.StopAtBounds
+
+                  ColumnLayout {
+                    id: fileListCol
+                    width: parent.width
+                    spacing: 0
+
+                    Repeater {
+                      model: root.archiveFiles
+
+                      Rectangle {
+                        Layout.fillWidth: true
+                        height: 44
+                        color: {
+                          var isSelected = root.selectedArchive === modelData.path
+                          if (isSelected) return "#2d2250"
+                          if (fileItemMouse.containsMouse) return "#1e1e30"
+                          return "transparent"
+                        }
+                        border.color: root.selectedArchive === modelData.path ? "#cba6f7" : "transparent"
+                        border.width: root.selectedArchive === modelData.path ? 1 : 0
+
+                        RowLayout {
+                          anchors.fill: parent
+                          anchors.leftMargin: 10
+                          anchors.rightMargin: 10
+                          spacing: 8
+
+                          // Radio indicator
+                          Rectangle {
+                            width: 16
+                            height: 16
+                            radius: 8
+                            color: "transparent"
+                            border.color: root.selectedArchive === modelData.path ? "#cba6f7" : "#585b70"
+                            border.width: 1.5
+
+                            Rectangle {
+                              anchors.centerIn: parent
+                              width: 8
+                              height: 8
+                              radius: 4
+                              color: "#cba6f7"
+                              visible: root.selectedArchive === modelData.path
+                            }
+                          }
+
+                          ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 1
+
+                            Text {
+                              Layout.fillWidth: true
+                              text: modelData.name
+                              font.pixelSize: 12
+                              font.bold: root.selectedArchive === modelData.path
+                              color: root.selectedArchive === modelData.path ? "#cdd6f4" : "#a6adc8"
+                              elide: Text.ElideMiddle
+                            }
+
+                            Text {
+                              Layout.fillWidth: true
+                              text: modelData.size + "  ·  " + modelData.date
+                              font.pixelSize: 9
+                              color: "#585b70"
+                            }
+                          }
+                        }
+
+                        MouseArea {
+                          id: fileItemMouse
+                          anchors.fill: parent
+                          hoverEnabled: true
+                          cursorShape: Qt.PointingHandCursor
+                          onClicked: root.selectedArchive = modelData.path
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
             // Start Restore Button (shown when idle)
             Rectangle {
               visible: !root.isProcessing
               Layout.fillWidth: true
               height: 40
               radius: 8
-              color: restoreBtnMouse.pressed ? "#b4befe" : restoreBtnMouse.containsMouse ? "#cba6f7" : "#cba6f7"
+              color: {
+                if (!root.selectedArchive) return "#45475a"
+                if (restoreBtnMouse.pressed) return "#b4befe"
+                if (restoreBtnMouse.containsMouse) return "#d4b5fc"
+                return "#cba6f7"
+              }
 
               Text {
                 anchors.centerIn: parent
-                text: "⚡ Start Restore"
+                text: root.selectedArchive ? "⚡ Start Restore" : "Select an archive above"
                 font.pixelSize: 13
                 font.bold: true
-                color: "#11111b"
+                color: root.selectedArchive ? "#11111b" : "#6c7086"
               }
 
               MouseArea {
                 id: restoreBtnMouse
                 anchors.fill: parent
                 hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root.handleRestoreClick()
+                cursorShape: root.selectedArchive ? Qt.PointingHandCursor : Qt.ForbiddenCursor
+                onClicked: {
+                  if (root.selectedArchive) root.handleRestoreClick()
+                }
               }
             }
           }
@@ -1388,19 +1520,40 @@ Item {
   // --- Background Processes ---
 
   Process {
-    id: checkArchiveProcess
+    id: scanArchiveProcess
     command: [
       "bash", "-c",
-      "for p in \"$HOME/Downloads/omarchy-migration.tar.gz\" \"$HOME/Downloads/LocalSend/omarchy-migration.tar.gz\" \"$HOME/omarchy-migration.tar.gz\"; do\n" +
-      "  [ -f \"$p\" ] && echo 'found' && exit 0\n" +
-      "done\n" +
-      "FOUND=$(find \"$HOME/Downloads\" \"$HOME\" -maxdepth 2 -type f -name \"*migration*.tar.gz\" 2>/dev/null | head -n 1)\n" +
-      "[ -n \"$FOUND\" ] && echo 'found' || echo 'missing'\n"
+      "echo '[';\n" +
+      "first=1;\n" +
+      "find \"$HOME/Downloads\" -maxdepth 2 -type f -name '*.tar.gz' -printf '%T@ %p\\n' 2>/dev/null | sort -rn | head -n 20 | while IFS= read -r line; do\n" +
+      "  f=\"${line#* }\";\n" +
+      "  [ -f \"$f\" ] || continue;\n" +
+      "  name=$(basename \"$f\");\n" +
+      "  size=$(du -h \"$f\" 2>/dev/null | cut -f1);\n" +
+      "  ts=$(stat -c '%Y' \"$f\" 2>/dev/null);\n" +
+      "  datestr=$(date -d @\"$ts\" '+%m/%d %H:%M' 2>/dev/null || echo 'unknown');\n" +
+      "  [ $first -eq 1 ] && first=0 || printf ',';\n" +
+      "  printf '{\"name\":\"%s\",\"path\":\"%s\",\"size\":\"%s\",\"date\":\"%s\"}' \"$name\" \"$f\" \"$size\" \"$datestr\";\n" +
+      "done;\n" +
+      "echo ']';\n"
     ]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: function(text) {
-        root.archiveDetected = (String(text).trim() === "found")
+        try {
+          var list = JSON.parse(String(text).trim())
+          root.archiveFiles = list
+          // Auto-select if only one archive, or if current selection is stale
+          if (list.length === 1) {
+            root.selectedArchive = list[0].path
+          } else if (root.selectedArchive) {
+            var stillValid = list.some(function(f) { return f.path === root.selectedArchive })
+            if (!stillValid) root.selectedArchive = ""
+          }
+        } catch(e) {
+          root.archiveFiles = []
+          root.selectedArchive = ""
+        }
       }
     }
   }
@@ -1492,13 +1645,13 @@ Item {
       if (code === 0) {
         root.exportStep = 2
         root.statusText = "Backup ready: ~/omarchy-migration.tar.gz"
-        root.checkArchive()
+        root.scanArchives()
       } else {
         root.exportStep = 4
         if (!root.statusText || root.statusText === "Packaging in progress..." || root.statusText === "Packaging system...") {
           root.statusText = "Export process failed or was interrupted (code " + code + ")."
         }
-        root.checkArchive()
+        root.scanArchives()
       }
     }
   }

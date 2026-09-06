@@ -151,7 +151,7 @@ If your new computer has a fresh Omarchy installation without the OmaMigrate plu
 mkdir -p ~/omarchy-restore && tar -xzf ~/Downloads/omarchy-migration.tar.gz -C ~/omarchy-restore
 cd ~/omarchy-restore && ./restore.sh
 ```
-*The restore engine will install all applications, configure services, restore keyrings, and automatically restore the OmaMigrate plugin itself!*
+*The restore engine will install all applications, configure services, restore keyrings, and adapt configurations seamlessly.*
 
 ### Scenario C: Terminal CLI Usage
 

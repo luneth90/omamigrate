@@ -139,7 +139,7 @@ omarchy restart shell
 mkdir -p ~/omarchy-restore && tar -xzf ~/Downloads/omarchy-migration.tar.gz -C ~/omarchy-restore
 cd ~/omarchy-restore && ./restore.sh
 ```
-*还原脚本会自动补齐缺失软件、恢复密钥凭据、重配网络服务，并自动将 OmaMigrate 插件本身一并恢复到新电脑。*
+*还原脚本会自动补齐缺失软件、恢复密钥凭据、重配网络服务并自适应配置路径。*
 
 ### 场景三：终端命令行调用（CLI 极客模式）
 

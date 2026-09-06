@@ -56,6 +56,8 @@ mkdir -p "${BACKUP_DIR}/user_home/.local/bin"
 if [ -d "$HOME/.local/bin" ]; then
   msg_step "Including user scripts: ~/.local/bin"
   cp -rp "$HOME/.local/bin"/* "${BACKUP_DIR}/user_home/.local/bin/" 2>/dev/null || true
+  # Exclude OmaMigrate binary/symlinks from backup
+  rm -f "${BACKUP_DIR}/user_home/.local/bin/"*omamigrate* 2>/dev/null || true
 fi
 
 # Linux desktop Secret Service / Keyrings (agy, VS Code, Git, Chrome credentials)
@@ -72,13 +74,24 @@ for item in "${CONFIG_TARGETS[@]}"; do
     msg_step "Including config: ~/.config/${item}"
     if [ -d "$HOME/.config/$item" ]; then
       rsync -a --exclude='Cache' --exclude='GPUCache' --exclude='*.asar' --exclude='*.sock' \
-        --exclude='plugins/luneth90.omamigrate' --exclude='plugins/omamigrate' \
+        --exclude='plugins/*omamigrate*' --exclude='*omamigrate*' \
         "$HOME/.config/$item" "${BACKUP_DIR}/user_home/.config/" 2>/dev/null || true
     else
       cp -p "$HOME/.config/$item" "${BACKUP_DIR}/user_home/.config/"
     fi
   fi
 done
+
+# Strictly exclude OmaMigrate plugin files, directories, and registrations
+rm -rf "${BACKUP_DIR}/user_home/.config/omarchy/plugins/"*omamigrate* 2>/dev/null || true
+rm -rf "${BACKUP_DIR}/user_home/.config/"*omamigrate* 2>/dev/null || true
+
+# Strip omamigrate plugin registration from exported shell.json
+if [ -f "${BACKUP_DIR}/user_home/.config/omarchy/shell.json" ] && command -v jq >/dev/null 2>&1; then
+  jq '.plugins = [.plugins[]? | select((.id // "") | test("omamigrate") | not)]' \
+    "${BACKUP_DIR}/user_home/.config/omarchy/shell.json" > "${BACKUP_DIR}/user_home/.config/omarchy/shell.json.tmp" && \
+    mv "${BACKUP_DIR}/user_home/.config/omarchy/shell.json.tmp" "${BACKUP_DIR}/user_home/.config/omarchy/shell.json"
+fi
 
 # Export portable GitHub CLI credentials (so gh works even without unlocked keyring on target)
 if command -v gh >/dev/null 2>&1; then
