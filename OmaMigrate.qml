@@ -1125,6 +1125,13 @@ Item {
               color: "#6c7086"
             }
 
+            Text {
+              visible: !root.isProcessing
+              text: "Only Downloads archives named with “migration” or “migrate” are shown"
+              font.pixelSize: 10
+              color: "#585b70"
+            }
+
             // Prominent Restoring In Progress Line (shown when active)
             Rectangle {
               visible: root.isProcessing
