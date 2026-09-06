@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
-import QtQuick.Dialogs
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -98,31 +97,6 @@ Item {
     scanArchiveProcess.running = true
   }
 
-  function localPathFromUrl(fileUrl) {
-    var value = String(fileUrl)
-    if (value.indexOf("file://") === 0) value = value.substring(7)
-    return decodeURIComponent(value)
-  }
-
-  function selectArchive(fileUrl) {
-    var path = root.localPathFromUrl(fileUrl)
-    if (!path) return
-
-    root.selectedArchive = path
-    var alreadyListed = root.archiveFiles.some(function(file) { return file.path === path })
-    if (!alreadyListed) {
-      var parts = path.split("/")
-      var updated = root.archiveFiles.slice()
-      updated.unshift({
-        "name": parts[parts.length - 1],
-        "path": path,
-        "size": "Chosen manually",
-        "date": ""
-      })
-      root.archiveFiles = updated
-    }
-  }
-
   function resetFlow() {
     root.exportStep = 1
     root.restoreStep = 1
@@ -206,28 +180,8 @@ Item {
     color: "transparent"
     WlrLayershell.namespace: "luneth90.omamigrate"
     WlrLayershell.layer: WlrLayer.Overlay
-    // A FileDialog is a separate floating window. Keeping Exclusive focus here
-    // prevents that window from receiving mouse/keyboard focus on Wayland.
-    WlrLayershell.keyboardFocus: !root.opened
-      ? WlrKeyboardFocus.None
-      : (archiveFileDialog.visible ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.Exclusive)
+    WlrLayershell.keyboardFocus: root.opened ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
     exclusionMode: ExclusionMode.Ignore
-
-    FileDialog {
-      id: archiveFileDialog
-      title: "Select migration archive"
-      fileMode: FileDialog.OpenFile
-      // Keep the chooser inside the overlay so it stays visible and clickable.
-      options: FileDialog.DontUseNativeDialog
-      nameFilters: ["Migration archives (*.tar.gz *.tgz)", "All files (*)"]
-      currentFolder: "file://" + String(Quickshell.env("HOME"))
-      onAccepted: root.selectArchive(selectedFile)
-      onVisibleChanged: {
-        if (!visible && root.opened) {
-          Qt.callLater(function() { keyCatcher.forceActiveFocus() })
-        }
-      }
-    }
 
     // Background scrim
     Rectangle {
@@ -1142,21 +1096,6 @@ Item {
                 color: "#cba6f7"
               }
               Item { Layout.fillWidth: true }
-              // Open a file chooser for archives stored outside Downloads.
-              Text {
-                visible: !root.isProcessing
-                text: "📂 Browse"
-                font.pixelSize: 10
-                color: browseArchiveMouse.containsMouse ? "#cdd6f4" : "#6c7086"
-                MouseArea {
-                  id: browseArchiveMouse
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: archiveFileDialog.open()
-                }
-              }
-              Item { width: 8 }
               // Refresh button
               Text {
                 visible: !root.isProcessing
@@ -1181,7 +1120,7 @@ Item {
 
             Text {
               visible: !root.isProcessing
-              text: "Choose a backup archive from ~/Downloads"
+              text: "Choose an OmaMigrate archive from your Downloads folder"
               font.pixelSize: 11
               color: "#6c7086"
             }
@@ -1271,42 +1210,16 @@ Item {
 
                   Text {
                     Layout.alignment: Qt.AlignHCenter
-                    text: root.archiveScanError || "No migration archives found"
+                    text: root.archiveScanError || "No OmaMigrate archives found in Downloads"
                     font.pixelSize: 12
                     color: root.archiveScanError ? "#f38ba8" : "#6c7086"
                   }
 
                   Text {
                     Layout.alignment: Qt.AlignHCenter
-                    text: "Transfer a .tar.gz file or click Browse"
+                    text: "Transfer an *migration*.tar.gz or *migrate*.tar.gz file first"
                     font.pixelSize: 10
                     color: "#585b70"
-                  }
-
-                  Rectangle {
-                    Layout.alignment: Qt.AlignHCenter
-                    Layout.preferredWidth: 132
-                    Layout.preferredHeight: 30
-                    radius: 6
-                    color: emptyBrowseMouse.pressed ? "#45475a" : (emptyBrowseMouse.containsMouse ? "#313244" : "#242438")
-                    border.color: "#45475a"
-                    border.width: 1
-
-                    Text {
-                      anchors.centerIn: parent
-                      text: "📂 Open file picker"
-                      font.pixelSize: 10
-                      font.bold: true
-                      color: "#cdd6f4"
-                    }
-
-                    MouseArea {
-                      id: emptyBrowseMouse
-                      anchors.fill: parent
-                      hoverEnabled: true
-                      cursorShape: Qt.PointingHandCursor
-                      onClicked: archiveFileDialog.open()
-                    }
                   }
 
                   Item { Layout.fillHeight: true }
@@ -1381,7 +1294,7 @@ Item {
 
                             Text {
                               Layout.fillWidth: true
-                              text: modelData.date ? modelData.size + "  ·  " + modelData.date : modelData.size
+                              text: modelData.size + "  ·  " + modelData.date
                               font.pixelSize: 9
                               color: "#585b70"
                             }
