@@ -136,32 +136,15 @@ jobs:
             echo "Release ${VERSION} of OmaMigrate." > "${NOTES_FILE}"
           fi
 
-      - name: Package distribution archive
-        id: package
-        run: |
-          TAG="${{ steps.release_ref.outputs.tag }}"
-          ARCHIVE="omamigrate-${TAG}.tar.gz"
-          tar --exclude-vcs \
-              --exclude='.github' \
-              --exclude='tests' \
-              --exclude='.*' \
-              -czvf "${ARCHIVE}" \
-              manifest.json OmaMigrate.qml bin lib LICENSE README.md README.zh-CN.md CHANGELOG.md SECURITY.md
-
-          sha256sum "${ARCHIVE}" > "${ARCHIVE}.sha256"
-          echo "archive=${ARCHIVE}" >> "$GITHUB_OUTPUT"
-          echo "checksum=${ARCHIVE}.sha256" >> "$GITHUB_OUTPUT"
-
       - name: Publish Release to GitHub
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ steps.release_ref.outputs.tag }}"
-          ARCHIVE="${{ steps.package.outputs.archive }}"
-          CHECKSUM="${{ steps.package.outputs.checksum }}"
           NOTES_FILE="release_notes.md"
 
-          gh release create "${TAG}" "${ARCHIVE}" "${CHECKSUM}" \
+          gh release create "${TAG}" \
             --title "OmaMigrate ${TAG}" \
             --notes-file "${NOTES_FILE}" \
             --verify-tag
+
