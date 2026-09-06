@@ -27,6 +27,12 @@ Item {
   property bool includeAiHistory: false
   property bool lockWarningActive: false
 
+  onIsProcessingChanged: {
+    if (root.isProcessing) {
+      Qt.callLater(function() { keyCatcher.forceActiveFocus() })
+    }
+  }
+
   Timer {
     id: lockWarningTimer
     interval: 2000
@@ -97,14 +103,43 @@ Item {
   function startExport() {
     root.showPasswordPrompt = false
     root.isProcessing = true
-    root.statusText = "Packaging in progress..."
+    root.statusText = "Packaging system..."
+    var pass = root.inputPassword
+    root.inputPassword = ""
+    exportProcess.command = [
+      "bash", "-c",
+      "PASS=\"$0\"\n" +
+      "if [ -n \"$PASS\" ]; then echo \"$PASS\" | sudo -S -p \"\" -v 2>/dev/null || true; fi\n" +
+      "OMAMIGRATE_FULL_AI=" + (root.includeAiHistory ? "1" : "0") + " OMAMIGRATE_SUDO_PASS=\"$PASS\" \"" + root.cliPath + "\" export\n",
+      pass
+    ]
     exportProcess.running = true
   }
 
   function startRestore() {
     root.showPasswordPrompt = false
     root.isProcessing = true
-    root.statusText = "Restoration in progress..."
+    root.statusText = "Restoring system..."
+    var pass = root.inputPassword
+    root.inputPassword = ""
+    restoreProcess.command = [
+      "bash", "-c",
+      "PASS=\"$0\"\n" +
+      "if [ -n \"$PASS\" ]; then echo \"$PASS\" | sudo -S -p \"\" -v 2>/dev/null || true; fi\n" +
+      "ARCHIVE=\"\"\n" +
+      "for p in \"$HOME/Downloads/omarchy-migration.tar.gz\" \"$HOME/Downloads/LocalSend/omarchy-migration.tar.gz\" \"$HOME/omarchy-migration.tar.gz\"; do\n" +
+      "  if [ -f \"$p\" ]; then ARCHIVE=\"$p\"; break; fi\n" +
+      "done\n" +
+      "if [ -z \"$ARCHIVE\" ]; then\n" +
+      "  ARCHIVE=$(find \"$HOME/Downloads\" \"$HOME\" -maxdepth 2 -type f -name \"*migration*.tar.gz\" 2>/dev/null | head -n 1)\n" +
+      "fi\n" +
+      "if [ -z \"$ARCHIVE\" ]; then\n" +
+      "  echo \"Error: Migration archive not found in ~/Downloads or ~\" >&2\n" +
+      "  exit 1\n" +
+      "fi\n" +
+      "OMAMIGRATE_GUI=1 OMAMIGRATE_SUDO_PASS=\"$PASS\" \"" + root.cliPath + "\" restore \"$ARCHIVE\"\n",
+      pass
+    ]
     restoreProcess.running = true
   }
 
@@ -206,18 +241,32 @@ Item {
         onClicked: {}
       }
 
+      // Card Shield during Processing (locks all mouse interactions)
+      MouseArea {
+        id: processingShield
+        anchors.fill: parent
+        z: 999
+        visible: root.isProcessing
+        hoverEnabled: true
+        preventStealing: true
+        cursorShape: Qt.BusyCursor
+        onClicked: root.notifyLocked()
+        onPressed: root.notifyLocked()
+        onDoubleClicked: root.notifyLocked()
+      }
+
       Item {
         id: keyCatcher
         anchors.fill: parent
         focus: true
         Keys.priority: Keys.BeforeItem
         Keys.onPressed: function(event) {
+          if (root.isProcessing) {
+            root.notifyLocked()
+            event.accepted = true
+            return
+          }
           if (event.key === Qt.Key_Escape) {
-            if (root.isProcessing) {
-              root.notifyLocked()
-              event.accepted = true
-              return
-            }
             if (root.showPasswordPrompt) {
               root.showPasswordPrompt = false
               root.isProcessing = false
@@ -225,6 +274,24 @@ Item {
               root.dismiss()
             }
             event.accepted = true
+          }
+        }
+        Keys.onReleased: function(event) {
+          if (root.isProcessing) {
+            event.accepted = true
+            return
+          }
+        }
+        Keys.onShortcutOverride: function(event) {
+          if (root.isProcessing) {
+            root.notifyLocked()
+            event.accepted = true
+            return
+          }
+        }
+        onActiveFocusChanged: {
+          if (root.isProcessing && !activeFocus) {
+            keyCatcher.forceActiveFocus()
           }
         }
       }
@@ -582,32 +649,24 @@ Item {
                   }
                 }
 
-                ColumnLayout {
+                RowLayout {
                   Layout.fillWidth: true
-                  spacing: 1
-
-                  RowLayout {
-                    spacing: 6
-                    Text {
-                      text: "Packaging in progress..."
-                      font.pixelSize: 13
-                      font.bold: true
-                      color: "#89b4fa"
-                    }
-                    Text {
-                      text: "🔒 Locked"
-                      font.pixelSize: 10
-                      font.bold: true
-                      color: "#6c7086"
-                    }
-                  }
+                  spacing: 6
 
                   Text {
                     Layout.fillWidth: true
-                    text: root.statusText
-                    font.pixelSize: 11
-                    color: "#a6adc8"
+                    text: (root.statusText && root.statusText !== "Ready") ? root.statusText : "Packaging in progress..."
+                    font.pixelSize: 13
+                    font.bold: true
+                    color: "#89b4fa"
                     elide: Text.ElideRight
+                  }
+
+                  Text {
+                    text: "🔒 Locked"
+                    font.pixelSize: 10
+                    font.bold: true
+                    color: "#6c7086"
                   }
                 }
               }
@@ -901,6 +960,110 @@ Item {
             }
           }
 
+          // Step 4: Export Error / Failure
+          ColumnLayout {
+            visible: root.exportStep === 4
+            Layout.fillWidth: true
+            spacing: 10
+
+            RowLayout {
+              Text {
+                text: "EXPORT ERROR"
+                font.pixelSize: 10
+                font.bold: true
+                color: "#f38ba8"
+              }
+              Item { Layout.fillWidth: true }
+            }
+
+            Text {
+              text: "✗ Packaging Interrupted or Failed"
+              font.pixelSize: 15
+              font.bold: true
+              color: "#f38ba8"
+            }
+
+            Rectangle {
+              Layout.fillWidth: true
+              height: 48
+              radius: 6
+              color: "#2a1b26"
+              border.color: "#f38ba8"
+              border.width: 1
+
+              RowLayout {
+                anchors.fill: parent
+                anchors.margins: 8
+                spacing: 8
+                Text {
+                  Layout.fillWidth: true
+                  text: root.statusText
+                  font.pixelSize: 11
+                  color: "#f38ba8"
+                  wrapMode: Text.WordWrap
+                }
+              }
+            }
+
+            Item { height: 4 }
+
+            RowLayout {
+              Layout.fillWidth: true
+              spacing: 8
+
+              Rectangle {
+                Layout.fillWidth: true
+                height: 38
+                radius: 8
+                color: retryExportMouse.pressed ? "#74c7ec" : retryExportMouse.containsMouse ? "#b4befe" : "#89b4fa"
+
+                Text {
+                  anchors.centerIn: parent
+                  text: "Retry Backup"
+                  font.pixelSize: 13
+                  font.bold: true
+                  color: "#11111b"
+                }
+
+                MouseArea {
+                  id: retryExportMouse
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: {
+                    root.exportStep = 1
+                    root.handleExportClick()
+                  }
+                }
+              }
+
+              Rectangle {
+                Layout.fillWidth: true
+                height: 38
+                radius: 8
+                color: cancelExportMouse.pressed ? "#45475a" : cancelExportMouse.containsMouse ? "#3b3d52" : "#313244"
+
+                Text {
+                  anchors.centerIn: parent
+                  text: "Back"
+                  font.pixelSize: 13
+                  font.bold: true
+                  color: "#cdd6f4"
+                }
+
+                MouseArea {
+                  id: cancelExportMouse
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: {
+                    root.resetFlow()
+                  }
+                }
+              }
+            }
+          }
+
           Item { Layout.fillHeight: true }
         }
 
@@ -994,32 +1157,24 @@ Item {
                   }
                 }
 
-                ColumnLayout {
+                RowLayout {
                   Layout.fillWidth: true
-                  spacing: 1
-
-                  RowLayout {
-                    spacing: 6
-                    Text {
-                      text: "Restoration in progress..."
-                      font.pixelSize: 13
-                      font.bold: true
-                      color: "#cba6f7"
-                    }
-                    Text {
-                      text: "🔒 Locked"
-                      font.pixelSize: 10
-                      font.bold: true
-                      color: "#6c7086"
-                    }
-                  }
+                  spacing: 6
 
                   Text {
                     Layout.fillWidth: true
-                    text: root.statusText
-                    font.pixelSize: 11
-                    color: "#a6adc8"
+                    text: (root.statusText && root.statusText !== "Ready") ? root.statusText : "Restoring system..."
+                    font.pixelSize: 13
+                    font.bold: true
+                    color: "#cba6f7"
                     elide: Text.ElideRight
+                  }
+
+                  Text {
+                    text: "🔒 Locked"
+                    font.pixelSize: 10
+                    font.bold: true
+                    color: "#6c7086"
                   }
                 }
               }
@@ -1106,6 +1261,118 @@ Item {
             }
           }
 
+          // Step 3: Restore Error / Failure
+          ColumnLayout {
+            visible: root.restoreStep === 3
+            Layout.fillWidth: true
+            spacing: 10
+
+            RowLayout {
+              Text {
+                text: "RESTORE ERROR"
+                font.pixelSize: 10
+                font.bold: true
+                color: "#f38ba8"
+              }
+              Item { Layout.fillWidth: true }
+            }
+
+            Text {
+              text: "✗ Restoration Interrupted or Failed"
+              font.pixelSize: 15
+              font.bold: true
+              color: "#f38ba8"
+            }
+
+            Rectangle {
+              Layout.fillWidth: true
+              height: 48
+              radius: 6
+              color: "#2a1b26"
+              border.color: "#f38ba8"
+              border.width: 1
+
+              RowLayout {
+                anchors.fill: parent
+                anchors.margins: 8
+                spacing: 8
+                Text {
+                  Layout.fillWidth: true
+                  text: root.statusText
+                  font.pixelSize: 11
+                  color: "#f38ba8"
+                  wrapMode: Text.WordWrap
+                }
+              }
+            }
+
+            Text {
+              text: "Please verify that the archive file is valid and password was entered correctly."
+              font.pixelSize: 11
+              color: "#a6adc8"
+              wrapMode: Text.WordWrap
+              Layout.fillWidth: true
+            }
+
+            Item { height: 4 }
+
+            RowLayout {
+              Layout.fillWidth: true
+              spacing: 8
+
+              Rectangle {
+                Layout.fillWidth: true
+                height: 38
+                radius: 8
+                color: retryRestoreMouse.pressed ? "#b4befe" : retryRestoreMouse.containsMouse ? "#cba6f7" : "#cba6f7"
+
+                Text {
+                  anchors.centerIn: parent
+                  text: "Retry Restore"
+                  font.pixelSize: 13
+                  font.bold: true
+                  color: "#11111b"
+                }
+
+                MouseArea {
+                  id: retryRestoreMouse
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: {
+                    root.restoreStep = 1
+                    root.handleRestoreClick()
+                  }
+                }
+              }
+
+              Rectangle {
+                Layout.fillWidth: true
+                height: 38
+                radius: 8
+                color: cancelRestoreMouse.pressed ? "#45475a" : cancelRestoreMouse.containsMouse ? "#3b3d52" : "#313244"
+
+                Text {
+                  anchors.centerIn: parent
+                  text: "Back"
+                  font.pixelSize: 13
+                  font.bold: true
+                  color: "#cdd6f4"
+                }
+
+                MouseArea {
+                  id: cancelRestoreMouse
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: {
+                    root.resetFlow()
+                  }
+                }
+              }
+            }
+          }
+
           Item { Layout.fillHeight: true }
         }
       }
@@ -1116,7 +1383,14 @@ Item {
 
   Process {
     id: checkArchiveProcess
-    command: ["bash", "-c", "[ -f \"$HOME/Downloads/omarchy-migration.tar.gz\" ] || [ -f \"$HOME/omarchy-migration.tar.gz\" ] && echo 'found' || echo 'missing'"]
+    command: [
+      "bash", "-c",
+      "for p in \"$HOME/Downloads/omarchy-migration.tar.gz\" \"$HOME/Downloads/LocalSend/omarchy-migration.tar.gz\" \"$HOME/omarchy-migration.tar.gz\"; do\n" +
+      "  [ -f \"$p\" ] && echo 'found' && exit 0\n" +
+      "done\n" +
+      "FOUND=$(find \"$HOME/Downloads\" \"$HOME\" -maxdepth 2 -type f -name \"*migration*.tar.gz\" 2>/dev/null | head -n 1)\n" +
+      "[ -n \"$FOUND\" ] && echo 'found' || echo 'missing'\n"
+    ]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: function(text) {
@@ -1213,7 +1487,10 @@ Item {
         root.statusText = "Backup ready: ~/omarchy-migration.tar.gz"
         root.checkArchive()
       } else {
-        root.statusText = "Export finished or cancelled."
+        root.exportStep = 4
+        if (!root.statusText || root.statusText === "Packaging in progress..." || root.statusText === "Packaging system...") {
+          root.statusText = "Export process failed or was interrupted (code " + code + ")."
+        }
         root.checkArchive()
       }
     }
@@ -1232,7 +1509,18 @@ Item {
     id: restoreProcess
     command: [
       "bash", "-c",
-      "ARCHIVE=\"$([ -f $HOME/Downloads/omarchy-migration.tar.gz ] && echo $HOME/Downloads/omarchy-migration.tar.gz || echo $HOME/omarchy-migration.tar.gz)\"; OMAMIGRATE_GUI=1 \"" + root.cliPath + "\" restore \"$ARCHIVE\""
+      "ARCHIVE=\"\"\n" +
+      "for p in \"$HOME/Downloads/omarchy-migration.tar.gz\" \"$HOME/Downloads/LocalSend/omarchy-migration.tar.gz\" \"$HOME/omarchy-migration.tar.gz\"; do\n" +
+      "  if [ -f \"$p\" ]; then ARCHIVE=\"$p\"; break; fi\n" +
+      "done\n" +
+      "if [ -z \"$ARCHIVE\" ]; then\n" +
+      "  ARCHIVE=$(find \"$HOME/Downloads\" \"$HOME\" -maxdepth 2 -type f -name \"*migration*.tar.gz\" 2>/dev/null | head -n 1)\n" +
+      "fi\n" +
+      "if [ -z \"$ARCHIVE\" ]; then\n" +
+      "  echo \"Error: Migration archive not found in ~/Downloads or ~\" >&2\n" +
+      "  exit 1\n" +
+      "fi\n" +
+      "OMAMIGRATE_GUI=1 \"" + root.cliPath + "\" restore \"$ARCHIVE\"\n"
     ]
     stdout: SplitParser {
       onRead: function(line) {
@@ -1256,8 +1544,9 @@ Item {
         root.restoreStep = 2
         root.statusText = "Restoration completed successfully!"
       } else {
-        if (!root.statusText || root.statusText === "Restoration in progress...") {
-          root.statusText = "Restore exited with code " + code + ". Check logs or disk space."
+        root.restoreStep = 3
+        if (!root.statusText || root.statusText === "Restoration in progress..." || root.statusText === "Restoring system...") {
+          root.statusText = "Restore process exited with code " + code + "."
         }
       }
     }

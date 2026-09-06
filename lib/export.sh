@@ -17,6 +17,12 @@ rm -rf "${STAGING_BASE}/export-"* 2>/dev/null || true
 BACKUP_DIR="$(mktemp -d "${STAGING_BASE}/export-XXXXXX")"
 trap 'rm -rf "${BACKUP_DIR:-}"' EXIT INT TERM
 
+# Initialize sudo credential cache if password provided by OmaMigrate GUI
+if [ -n "${OMAMIGRATE_SUDO_PASS:-}" ]; then
+  echo "$OMAMIGRATE_SUDO_PASS" | sudo -S -p "" -v 2>/dev/null || true
+  unset OMAMIGRATE_SUDO_PASS
+fi
+
 msg_info "Starting OmaMigrate Export..."
 msg_step "Creating staging directory: ${BACKUP_DIR}"
 mkdir -p "${BACKUP_DIR}/user_home"
@@ -66,6 +72,7 @@ for item in "${CONFIG_TARGETS[@]}"; do
     msg_step "Including config: ~/.config/${item}"
     if [ -d "$HOME/.config/$item" ]; then
       rsync -a --exclude='Cache' --exclude='GPUCache' --exclude='*.asar' --exclude='*.sock' \
+        --exclude='plugins/luneth90.omamigrate' --exclude='plugins/omamigrate' \
         "$HOME/.config/$item" "${BACKUP_DIR}/user_home/.config/" 2>/dev/null || true
     else
       cp -p "$HOME/.config/$item" "${BACKUP_DIR}/user_home/.config/"

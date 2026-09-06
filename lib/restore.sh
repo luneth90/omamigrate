@@ -28,6 +28,12 @@ RESTORE_DATA_DIR="${1:-$SCRIPT_DIR}"
 CURRENT_USER="$(id -un)"
 CURRENT_HOME="$HOME"
 
+# Initialize sudo credential cache if password provided by OmaMigrate GUI
+if [ -n "${OMAMIGRATE_SUDO_PASS:-}" ]; then
+  echo "$OMAMIGRATE_SUDO_PASS" | sudo -S -p "" -v 2>/dev/null || true
+  unset OMAMIGRATE_SUDO_PASS
+fi
+
 # Define privilege elevator
 if sudo -n true 2>/dev/null; then
   ELEVATOR="sudo -n"
@@ -61,6 +67,13 @@ mkdir -p "${CURRENT_HOME}/.config" "${CURRENT_HOME}/.local/bin"
 
 if [ -d "${RESTORE_DATA_DIR}/user_home" ]; then
   chmod -R u+w "${CURRENT_HOME}" 2>/dev/null || true
+
+  # CRITICAL: Strip out running OmaMigrate plugin files from extraction!
+  # Quickshell's file watcher hot-reloads the plugin if its files are modified,
+  # which would abruptly destroy the QML window and abort restoration!
+  rm -rf "${RESTORE_DATA_DIR}/user_home/.config/omarchy/plugins/luneth90.omamigrate" \
+         "${RESTORE_DATA_DIR}/user_home/.config/omarchy/plugins/omamigrate" 2>/dev/null || true
+
   if [ -d "${RESTORE_DATA_DIR}/user_home/.config" ]; then
     for cfg in "${RESTORE_DATA_DIR}/user_home/.config"/*; do
       [ -e "$cfg" ] && msg_step "Restoring config: ~/.config/$(basename "$cfg")"
@@ -69,7 +82,15 @@ if [ -d "${RESTORE_DATA_DIR}/user_home" ]; then
   for cred in .ssh .gnupg .password-store .claude .codex .gemini .grok .thunderbird .proxychains; do
     [ -d "${RESTORE_DATA_DIR}/user_home/$cred" ] && msg_step "Restoring credential store: ~/$cred"
   done
-  cp -rfp "${RESTORE_DATA_DIR}/user_home/." "${CURRENT_HOME}/"
+
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a \
+      --exclude='.config/omarchy/plugins/luneth90.omamigrate' \
+      --exclude='.config/omarchy/plugins/omamigrate' \
+      "${RESTORE_DATA_DIR}/user_home/" "${CURRENT_HOME}/"
+  else
+    cp -rfp "${RESTORE_DATA_DIR}/user_home/." "${CURRENT_HOME}/"
+  fi
   msg_ok "User configs and dotfiles extracted."
 fi
 
@@ -158,6 +179,12 @@ fi
 msg_info "Detecting and installing missing software packages..."
 PKG_FILE="${RESTORE_DATA_DIR}/pkg_meta/packages_explicit.txt"
 
+# Sync package databases first so package lookups and installs do not fail on fresh installations
+if sudo -n true 2>/dev/null; then
+  msg_step "Syncing package databases..."
+  $ELEVATOR pacman -Sy --noconfirm 2>/dev/null || true
+fi
+
 if [ -f "$PKG_FILE" ]; then
   MISSING_PKGS=()
   while IFS= read -r pkg; do
@@ -242,14 +269,13 @@ fi
 msg_ok "Background services and timers activated."
 
 # 10. Reload desktop environment
-msg_info "Reloading desktop environment..."
-if command -v hyprctl >/dev/null 2>&1; then
-  msg_step "Reloading Hyprland configuration..."
-  hyprctl reload 2>/dev/null || true
-fi
-
-# Only restart shell automatically when executed from standalone CLI, NOT from OmaMigrate GUI
+# Only reload Hyprland & restart shell automatically when executed from standalone CLI, NOT from OmaMigrate GUI
 if [ -z "${OMAMIGRATE_GUI:-}" ]; then
+  msg_info "Reloading desktop environment..."
+  if command -v hyprctl >/dev/null 2>&1; then
+    msg_step "Reloading Hyprland configuration..."
+    hyprctl reload 2>/dev/null || true
+  fi
   if command -v omarchy >/dev/null 2>&1; then
     msg_step "Restarting Omarchy shell..."
     omarchy restart shell 2>/dev/null || true
