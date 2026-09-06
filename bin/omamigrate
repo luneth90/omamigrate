@@ -260,6 +260,15 @@ cmd_send() {
   fi
   local archive="${1:-}"
   if [ -z "$archive" ]; then
+    local cache_marker="${XDG_CACHE_HOME:-$HOME/.cache}/omamigrate/last_backup"
+    if [ -f "$cache_marker" ]; then
+      local candidate="$(cat "$cache_marker" 2>/dev/null || true)"
+      if [ -n "$candidate" ] && [ -f "$candidate" ]; then
+        archive="$candidate"
+      fi
+    fi
+  fi
+  if [ -z "$archive" ]; then
     local download_dir=""
     if command -v xdg-user-dir >/dev/null 2>&1; then
       download_dir="$(xdg-user-dir DOWNLOAD 2>/dev/null || true)"
