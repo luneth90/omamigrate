@@ -110,7 +110,7 @@ Whether you prefer background daemons or modern GUI desktop clients, OmaMigrate 
 
 ## Installation & Desktop Integration
 
-### 1. Official One-Command Install
+### 1. Install Plugin
 
 Install and enable OmaMigrate directly using Omarchy's official plugin manager:
 
@@ -118,18 +118,13 @@ Install and enable OmaMigrate directly using Omarchy's official plugin manager:
 omarchy plugin add https://github.com/luneth90/omamigrate.git --enable
 ```
 
-*Lifecycle management commands:*
+### 2. Bind Shortcut & Restart Shell
+
+Run this command in your terminal to append the shortcut to `~/.config/hypr/bindings.lua` and restart the shell to take effect immediately (recommended: `SUPER + CTRL + M`, non-conflicting with Omarchy system defaults):
+
 ```bash
-omarchy plugin update omamigrate   # Update to latest version
-omarchy plugin remove omamigrate   # Uninstall plugin
-```
-
-### 2. Desktop Global Shortcut Binding
-
-Add a keybinding in `~/.config/hypr/bindings.lua` to summon the OmaMigrate HUD anywhere (recommended: `SUPER + CTRL + M`, perfectly non-conflicting with Omarchy default keys):
-
-```lua
-o.bind("SUPER + CTRL + M", "OmaMigrate", "omarchy-shell shell toggle omamigrate")
+echo 'o.bind("SUPER + CTRL + M", "OmaMigrate", "omarchy-shell shell toggle omamigrate")' >> ~/.config/hypr/bindings.lua
+omarchy restart shell
 ```
 
 ---
@@ -157,9 +152,7 @@ cd ~/omarchy-restore && ./restore.sh
 ```
 *The restore engine will install all applications, configure services, restore keyrings, and automatically restore the OmaMigrate plugin itself!*
 
----
-
-## Advanced: Terminal CLI Usage
+### Scenario C: Terminal CLI Usage
 
 OmaMigrate also ships with a fully featured CLI for headless or script-driven environments:
 
@@ -175,6 +168,20 @@ omamigrate restore <archive-path.tar.gz>
 ```
 
 > **💡 Note**: If you want to use the `omamigrate` command directly in your shell, symlink it to your PATH: `ln -s ~/.config/omarchy/plugins/omamigrate/bin/omamigrate ~/.local/bin/omamigrate`.
+
+---
+
+## Upgrade & Maintenance
+
+Lifecycle and update commands:
+
+```bash
+# Update to latest version
+omarchy plugin update omamigrate
+
+# Uninstall plugin
+omarchy plugin remove omamigrate
+```
 
 ---
 

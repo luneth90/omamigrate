@@ -97,7 +97,7 @@
 
 ## 安装与桌面集成
 
-### 1. 官方指令一键安装
+### 1. 安装插件
 
 在终端运行 Omarchy 官方插件管理指令，自动克隆并启用：
 
@@ -105,18 +105,13 @@
 omarchy plugin add https://github.com/luneth90/omamigrate.git --enable
 ```
 
-*日常管理指令：*
+### 2. 绑定快捷键
+
+在终端执行以下命令直接将快捷键追加到 `~/.config/hypr/bindings.lua`，并重启 shell 使快捷键立即生效（推荐 `SUPER + CTRL + M`，与 Omarchy 系统默认键位完美契合）：
+
 ```bash
-omarchy plugin update omamigrate   # 一键更新至最新版
-omarchy plugin remove omamigrate   # 一键卸载
-```
-
-### 2. 绑定桌面全局快捷键
-
-编辑 `~/.config/hypr/bindings.lua`，添加一行无冲突快捷键绑定（推荐 `SUPER + CTRL + M`，与 Omarchy 系统默认键位完美契合）：
-
-```lua
-o.bind("SUPER + CTRL + M", "OmaMigrate", "omarchy-shell shell toggle omamigrate")
+echo 'o.bind("SUPER + CTRL + M", "OmaMigrate", "omarchy-shell shell toggle omamigrate")' >> ~/.config/hypr/bindings.lua
+omarchy restart shell
 ```
 
 ---
@@ -128,12 +123,12 @@ o.bind("SUPER + CTRL + M", "OmaMigrate", "omarchy-shell shell toggle omamigrate"
 按下 `SUPER + CTRL + M` 即可随时唤出 OmaMigrate 操作面板：
 
 1. **📦 步骤一：一键打包 (Export)**
-   - 点击界面第 1 个按钮，自动弹出终端完成显式软件清单提取、硬件黑名单过滤、配置与凭证归档；
+   - 点击界面第 1 个按钮，自动完成显式软件清单提取、硬件黑名单过滤、配置与凭证归档；
    - 打包完成后在主目录生成 `~/omarchy-migration.tar.gz`。
 2. **📡 步骤二：隔空快传 (Beam via LocalSend)**
    - 点击界面第 2 个按钮直接拉起 LocalSend，将压缩包无线投送到新电脑的 `~/Downloads` 目录。
 3. **⚡ 步骤三：在新电脑一键还原 (Restore)**
-   - 新电脑收到压缩包后，按下快捷键唤出 OmaMigrate 面板，点击第 3 个按钮即可自动完成全套环境安装、凭据还原、路径自适应并秒级重载 Hyprland 桌面！
+   - 新电脑收到压缩包后，按下快捷键唤出 OmaMigrate 面板，点击第 3 个按钮即可自动完成全套环境安装、凭据还原、路径自适应并秒级重载桌面！
 
 ### 场景二：新电脑裸机还原（无需预装插件）
 
@@ -145,9 +140,7 @@ cd ~/omarchy-restore && ./restore.sh
 ```
 *还原脚本会自动补齐缺失软件、恢复密钥凭据、重配网络服务，并自动将 OmaMigrate 插件本身一并恢复到新电脑。*
 
----
-
-## 高级：终端命令行调用（CLI 极客模式）
+### 场景三：终端命令行调用（CLI 极客模式）
 
 插件已内置了完整的 CLI 命令行接口，若您偏好在终端中纯命令行执行：
 
@@ -163,6 +156,20 @@ omamigrate restore <归档包路径.tar.gz>
 ```
 
 > **💡 提示**：若希望在终端全局直接输入 `omamigrate` 命令，可建立软链接：`ln -s ~/.config/omarchy/plugins/omamigrate/bin/omamigrate ~/.local/bin/omamigrate`。
+
+---
+
+## 升级与维护
+
+日常升级与生命周期管理指令：
+
+```bash
+# 一键更新至最新版
+omarchy plugin update omamigrate
+
+# 一键卸载
+omarchy plugin remove omamigrate
+```
 
 ---
 
