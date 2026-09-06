@@ -48,6 +48,7 @@ Item {
   // In-interface password prompt state
   property bool showPasswordPrompt: false
   property string inputPassword: ""
+  property string savedPassword: ""
   property string authError: ""
   property bool authValidating: false
   property string pendingAction: "export" // "export" | "restore"
@@ -68,6 +69,7 @@ Item {
     root.opened = false
     root.showPasswordPrompt = false
     root.inputPassword = ""
+    root.savedPassword = ""
     root.authError = ""
   }
 
@@ -79,6 +81,7 @@ Item {
     root.opened = false
     root.showPasswordPrompt = false
     root.inputPassword = ""
+    root.savedPassword = ""
     root.authError = ""
     if (root.shell && typeof root.shell.hide === "function") {
       root.shell.hide("luneth90.omamigrate")
@@ -95,6 +98,7 @@ Item {
     root.isProcessing = false
     root.showPasswordPrompt = false
     root.inputPassword = ""
+    root.savedPassword = ""
     root.authError = ""
     root.statusText = "Ready"
     root.checkArchive()
@@ -104,7 +108,8 @@ Item {
     root.showPasswordPrompt = false
     root.isProcessing = true
     root.statusText = "Packaging system..."
-    var pass = root.inputPassword
+    var pass = root.savedPassword || root.inputPassword
+    root.savedPassword = ""
     root.inputPassword = ""
     exportProcess.command = [
       "bash", "-c",
@@ -120,7 +125,8 @@ Item {
     root.showPasswordPrompt = false
     root.isProcessing = true
     root.statusText = "Restoring system..."
-    var pass = root.inputPassword
+    var pass = root.savedPassword || root.inputPassword
+    root.savedPassword = ""
     root.inputPassword = ""
     restoreProcess.command = [
       "bash", "-c",
@@ -1446,6 +1452,8 @@ Item {
     onExited: function(code) {
       root.authValidating = false
       if (code === 0) {
+        root.savedPassword = root.inputPassword
+        root.inputPassword = ""
         root.showPasswordPrompt = false
         root.authError = ""
         if (root.pendingAction === "export") {
@@ -1463,7 +1471,6 @@ Item {
 
   Process {
     id: exportProcess
-    command: ["bash", "-c", "OMAMIGRATE_FULL_AI=" + (root.includeAiHistory ? "1" : "0") + " \"" + root.cliPath + "\" export"]
     stdout: SplitParser {
       onRead: function(line) {
         var clean = String(line).replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "").trim()
@@ -1507,21 +1514,6 @@ Item {
 
   Process {
     id: restoreProcess
-    command: [
-      "bash", "-c",
-      "ARCHIVE=\"\"\n" +
-      "for p in \"$HOME/Downloads/omarchy-migration.tar.gz\" \"$HOME/Downloads/LocalSend/omarchy-migration.tar.gz\" \"$HOME/omarchy-migration.tar.gz\"; do\n" +
-      "  if [ -f \"$p\" ]; then ARCHIVE=\"$p\"; break; fi\n" +
-      "done\n" +
-      "if [ -z \"$ARCHIVE\" ]; then\n" +
-      "  ARCHIVE=$(find \"$HOME/Downloads\" \"$HOME\" -maxdepth 2 -type f -name \"*migration*.tar.gz\" 2>/dev/null | head -n 1)\n" +
-      "fi\n" +
-      "if [ -z \"$ARCHIVE\" ]; then\n" +
-      "  echo \"Error: Migration archive not found in ~/Downloads or ~\" >&2\n" +
-      "  exit 1\n" +
-      "fi\n" +
-      "OMAMIGRATE_GUI=1 \"" + root.cliPath + "\" restore \"$ARCHIVE\"\n"
-    ]
     stdout: SplitParser {
       onRead: function(line) {
         var clean = String(line).replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "").trim()

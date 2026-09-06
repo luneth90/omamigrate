@@ -28,28 +28,51 @@ RESTORE_DATA_DIR="${1:-$SCRIPT_DIR}"
 CURRENT_USER="$(id -un)"
 CURRENT_HOME="$HOME"
 
-# Initialize sudo credential cache if password provided by OmaMigrate GUI
+# Sudo Privilege Initialization: Authenticate ONCE and keep alive
+SUDO_ASKPASS_SCRIPT=""
+SUDO_PID=""
+
+cleanup_privileges() {
+  [ -n "${SUDO_PID:-}" ] && kill "${SUDO_PID}" 2>/dev/null || true
+  [ -n "${SUDO_ASKPASS_SCRIPT:-}" ] && rm -f "${SUDO_ASKPASS_SCRIPT}" 2>/dev/null || true
+}
+trap cleanup_privileges EXIT INT TERM
+
+# If password provided by OmaMigrate GUI, configure credentials and transient askpass helper
 if [ -n "${OMAMIGRATE_SUDO_PASS:-}" ]; then
   echo "$OMAMIGRATE_SUDO_PASS" | sudo -S -p "" -v 2>/dev/null || true
+  
+  ASKPASS_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/omamigrate"
+  mkdir -p "$ASKPASS_DIR" && chmod 700 "$ASKPASS_DIR"
+  SUDO_ASKPASS_SCRIPT="$(mktemp "${ASKPASS_DIR}/askpass-XXXXXX.sh")"
+  cat << EOF > "$SUDO_ASKPASS_SCRIPT"
+#!/usr/bin/env bash
+echo "$OMAMIGRATE_SUDO_PASS"
+EOF
+  chmod 700 "$SUDO_ASKPASS_SCRIPT"
+  export SUDO_ASKPASS="$SUDO_ASKPASS_SCRIPT"
   unset OMAMIGRATE_SUDO_PASS
 fi
 
-# Define privilege elevator
-if sudo -n true 2>/dev/null; then
-  ELEVATOR="sudo -n"
-elif [ -t 0 ]; then
-  ELEVATOR="sudo"
-elif command -v pkexec >/dev/null 2>&1; then
-  ELEVATOR="pkexec"
-else
-  ELEVATOR="sudo -n"
+# If in an interactive terminal and not authenticated yet, prompt ONCE
+if ! sudo -n true 2>/dev/null; then
+  if [ -t 0 ]; then
+    msg_info "Administrator privileges required to restore system configurations & packages."
+    sudo -v || { msg_error "Administrator authentication failed."; exit 1; }
+  fi
 fi
 
-# Keep sudo credentials alive in background if authenticated
+# Keep sudo credentials alive in background continuously (no repetitive prompts)
 if sudo -n true 2>/dev/null; then
-  ( while true; do sudo -n -v 2>/dev/null; sleep 30; kill -0 "$$" 2>/dev/null || exit; done ) &
+  ( while true; do sudo -n -v 2>/dev/null; sleep 15; kill -0 "$$" 2>/dev/null || exit; done ) &
   SUDO_PID=$!
-  trap 'kill "${SUDO_PID:-}" 2>/dev/null || true' EXIT INT TERM
+  ELEVATOR="sudo -n"
+elif [ -n "${SUDO_ASKPASS:-}" ]; then
+  ELEVATOR="sudo -A"
+elif [ -t 0 ]; then
+  ELEVATOR="sudo"
+else
+  ELEVATOR="sudo -n"
 fi
 
 msg_info "Starting OmaMigrate Ecosystem Restoration..."
@@ -198,7 +221,7 @@ if [ -f "$PKG_FILE" ]; then
     msg_step "Found ${#MISSING_PKGS[@]} missing packages to install..."
     if command -v yay >/dev/null 2>&1; then
       msg_step "Installing missing packages with yay..."
-      yay -S --needed --noconfirm --answerclean None --answerdiff None --answeredit None "${MISSING_PKGS[@]}" || {
+      yay -S --needed --noconfirm --sudoloop --answerclean None --answerdiff None --answeredit None "${MISSING_PKGS[@]}" || {
         msg_warn "Some packages timed out. You can retry later."
       }
     elif command -v omarchy >/dev/null 2>&1; then
@@ -227,7 +250,7 @@ done
 if [ ${#CORE_MISSING[@]} -gt 0 ]; then
   msg_step "Installing missing core dependencies: ${CORE_MISSING[*]}"
   if command -v yay >/dev/null 2>&1; then
-    yay -S --needed --noconfirm --answerclean None --answerdiff None --answeredit None "${CORE_MISSING[@]}" || true
+    yay -S --needed --noconfirm --sudoloop --answerclean None --answerdiff None --answeredit None "${CORE_MISSING[@]}" || true
   else
     $ELEVATOR pacman -S --needed --noconfirm "${CORE_MISSING[@]}" || true
   fi

@@ -63,13 +63,26 @@ cmd_restore() {
     exit 1
   fi
 
+  # In interactive CLI mode, authenticate sudo ONCE at the start and keep it alive
+  if [ -t 0 ] && ! sudo -n true 2>/dev/null; then
+    msg_info "Administrator privileges required to restore system configurations & packages."
+    sudo -v || { msg_error "Administrator authentication failed."; exit 1; }
+  fi
+
   local staging_base="${XDG_CACHE_HOME:-$HOME/.cache}/omamigrate"
   mkdir -p "$staging_base"
   chmod 700 "$staging_base"
   rm -rf "${staging_base}/restore-"* 2>/dev/null || true
 
   RESTORE_DIR="$(mktemp -d "${staging_base}/restore-XXXXXX")"
-  trap 'rm -rf "${RESTORE_DIR:-}"' EXIT INT TERM
+
+  if sudo -n true 2>/dev/null; then
+    ( while true; do sudo -n -v 2>/dev/null; sleep 15; kill -0 "$$" 2>/dev/null || exit; done ) &
+    SUDO_PID=$!
+    trap 'kill "${SUDO_PID:-}" 2>/dev/null || true; rm -rf "${RESTORE_DIR:-}"' EXIT INT TERM
+  else
+    trap 'rm -rf "${RESTORE_DIR:-}"' EXIT INT TERM
+  fi
 
   msg_info "Extracting migration bundle from $(basename "$archive")..."
   msg_step "Extracting staging contents..."

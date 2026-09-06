@@ -198,8 +198,6 @@ if [ "${#unreadable_paths[@]}" -gt 0 ]; then
     ELEVATOR="sudo -n"
   elif [ -t 0 ]; then
     ELEVATOR="sudo"
-  elif command -v pkexec >/dev/null 2>&1; then
-    ELEVATOR="pkexec"
   else
     ELEVATOR="sudo -n"
   fi
