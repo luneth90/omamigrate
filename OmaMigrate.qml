@@ -206,7 +206,11 @@ Item {
     color: "transparent"
     WlrLayershell.namespace: "luneth90.omamigrate"
     WlrLayershell.layer: WlrLayer.Overlay
-    WlrLayershell.keyboardFocus: root.opened ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+    // A FileDialog is a separate floating window. Keeping Exclusive focus here
+    // prevents that window from receiving mouse/keyboard focus on Wayland.
+    WlrLayershell.keyboardFocus: !root.opened
+      ? WlrKeyboardFocus.None
+      : (archiveFileDialog.visible ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.Exclusive)
     exclusionMode: ExclusionMode.Ignore
 
     FileDialog {
@@ -218,6 +222,11 @@ Item {
       nameFilters: ["Migration archives (*.tar.gz *.tgz)", "All files (*)"]
       currentFolder: "file://" + String(Quickshell.env("HOME"))
       onAccepted: root.selectArchive(selectedFile)
+      onVisibleChanged: {
+        if (!visible && root.opened) {
+          Qt.callLater(function() { keyCatcher.forceActiveFocus() })
+        }
+      }
     }
 
     // Background scrim

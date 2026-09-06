@@ -40,6 +40,9 @@ if grep -q 'onStreamFinished: function' "${ROOT_DIR}/OmaMigrate.qml"; then
   exit 1
 fi
 
+echo "==> Checking file chooser focus handoff..."
+grep -q 'archiveFileDialog.visible ? WlrKeyboardFocus.OnDemand' "${ROOT_DIR}/OmaMigrate.qml"
+
 echo "==> Testing CLI help..."
 "${ROOT_DIR}/bin/omamigrate" --help >/dev/null
 
