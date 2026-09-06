@@ -12,7 +12,7 @@ for script in "${ROOT_DIR}/bin/omamigrate" "${ROOT_DIR}/lib/"*.sh; do
   echo "OK"
 done
 
-echo "==> Validating Python syntax..."
+echo "==> Validating Python syntax & unit tests..."
 if command -v python3 >/dev/null 2>&1; then
   for pyscript in "${ROOT_DIR}/tests/"*.py; do
     if [[ -f "$pyscript" ]]; then
@@ -21,6 +21,7 @@ if command -v python3 >/dev/null 2>&1; then
       echo "OK"
     fi
   done
+  python3 -m unittest discover -s "${ROOT_DIR}/tests" -p "test_*.py" -v
 fi
 
 echo "==> Checking executables..."
