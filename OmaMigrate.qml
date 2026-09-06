@@ -893,7 +893,7 @@ Item {
             }
 
             Text {
-              text: "Send this backup wirelessly to your target machine using LocalSend."
+              text: "Transfer this backup directly to a nearby device over your local network. No cloud upload."
               font.pixelSize: 12
               color: "#a6adc8"
               wrapMode: Text.WordWrap
@@ -924,7 +924,7 @@ Item {
 
                 Text {
                   Layout.fillWidth: true
-                  text: "Please open LocalSend on your target machine first so it can be discovered."
+                  text: "Open LocalSend on the nearby target device first so it can be discovered."
                   font.pixelSize: 11
                   color: "#fab387"
                   wrapMode: Text.WordWrap
@@ -942,7 +942,7 @@ Item {
 
               Text {
                 anchors.centerIn: parent
-                text: "📡 Send via LocalSend"
+                text: "📡 Open LocalSend"
                 font.pixelSize: 13
                 font.bold: true
                 color: "#11111b"
@@ -954,7 +954,7 @@ Item {
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
-                  root.statusText = "Launching LocalSend..."
+                  root.statusText = "Opening LocalSend for local transfer..."
                   sendProcess.running = true
                   root.dismiss()
                 }
@@ -969,7 +969,7 @@ Item {
             spacing: 10
 
             Text {
-              text: "✓ LocalSend Launched"
+              text: "✓ LocalSend Opened"
               font.pixelSize: 15
               font.bold: true
               color: "#a6e3a1"
@@ -1736,7 +1736,7 @@ Item {
     command: ["bash", "-c", "\"" + root.cliPath + "\" send \"$HOME/omamigrate-backup.tar.gz\""]
     onExited: function() {
       root.exportStep = 3
-      root.statusText = "LocalSend launched."
+      root.statusText = "LocalSend opened. Select a nearby device for local transfer."
     }
   }
 

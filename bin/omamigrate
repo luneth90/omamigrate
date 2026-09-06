@@ -22,7 +22,7 @@ Usage:
 Commands:
   backup [output]        Create a portable migration backup
   restore <backup_file>  Restore a migration backup from a specific file
-  send [backup_file]     Send a migration backup with LocalSend
+  send [backup_file]     Open a migration backup in LocalSend for local transfer
   status                 Show the migration inventory summary
   version                Show the installed version
   help [command]         Show global or command-specific help
@@ -89,7 +89,8 @@ show_send_help() {
 Usage:
   omamigrate send [backup_file]
 
-Open LocalSend with the selected migration backup.
+Open the selected migration backup in LocalSend for direct transfer to a nearby
+device over the local network. This does not upload the backup to cloud storage.
 
 Arguments:
   backup_file  Optional path to a migration backup
@@ -264,7 +265,7 @@ cmd_send() {
   fi
 
   if command -v localsend >/dev/null 2>&1; then
-    msg_info "Opening LocalSend to transfer ${archive}..."
+    msg_info "Opening LocalSend for direct local transfer: ${archive}"
     if command -v systemd-run >/dev/null 2>&1; then
       systemd-run --user --unit="localsend-$(date +%s%N)" localsend "$archive" >/dev/null 2>&1 || true
     elif command -v uwsm-app >/dev/null 2>&1; then
@@ -272,7 +273,7 @@ cmd_send() {
     else
       nohup setsid localsend "$archive" </dev/null >/dev/null 2>&1 &
     fi
-    msg_ok "LocalSend launched. Select your new device to send the migration backup."
+    msg_ok "LocalSend opened. Select a nearby device for direct local transfer."
   else
     msg_warn "LocalSend is not installed. You can transfer using scp:"
     echo "  scp ${archive} <user>@<new-ip>:~/"
