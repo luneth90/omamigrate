@@ -15,7 +15,9 @@
 [![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](CHANGELOG.md)
 [![Architecture](https://img.shields.io/badge/Arch-x86__64%20%7C%20aarch64-orange)](#跨硬件架构智能兼容)
 
-![OmaMigrate 备份界面](preview.png)
+<p align="center">
+  <img src="preview.png" alt="OmaMigrate 备份界面" width="720">
+</p>
 
 ---
 
