@@ -203,6 +203,12 @@ class TestRestoreContract(unittest.TestCase):
         self.assertNotIn("OMAMIGRATE_SKIP_PROTECTED_SYSTEM", self.qml)
         self.assertIn("refusing to create an incomplete migration backup", self.export)
 
+    def test_shell_json_is_excluded_from_bulk_restore_and_atomically_injected(self):
+        self.assertIn("--exclude='.config/omarchy/shell.json'", self.restore)
+        self.assertIn("TARGET_SHELL_JSON", self.restore)
+        self.assertIn("TMP_SHELL_JSON", self.restore)
+        self.assertIn("luneth90.omamigrate", self.restore)
+
 
 if __name__ == "__main__":
     unittest.main()

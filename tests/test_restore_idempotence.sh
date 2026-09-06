@@ -17,6 +17,7 @@ mkdir -p \
   "$TEST_ROOT/var-lib" \
   "$TEST_ROOT/home" \
   "$TEST_ROOT/restore/user_home" \
+  "$TEST_ROOT/restore/user_home/.config/omarchy" \
   "$TEST_ROOT/restore/user_home/.config/mihomo" \
   "$TEST_ROOT/restore/user_home/.config/systemd/user" \
   "$TEST_ROOT/restore/user_home/.local/bin" \
@@ -24,6 +25,7 @@ mkdir -p \
   "$TEST_ROOT/restore/pkg_meta" \
   "$TEST_ROOT/bin"
 
+printf '%s\n' '{"plugins":[{"id":"other.plugin"}]}' > "$TEST_ROOT/restore/user_home/.config/omarchy/shell.json"
 printf '%s\n' '/home/source-user' > "$TEST_ROOT/restore/pkg_meta/source_home.txt"
 : > "$TEST_ROOT/restore/pkg_meta/packages_explicit.txt"
 printf '%s\n' 'export PROJECT=/home/source-user/project' > "$TEST_ROOT/restore/user_home/.bashrc"
@@ -161,5 +163,7 @@ test "$(stat -c %a "$TEST_ROOT/home/.config/mihoro.toml")" = 600
 grep -q 'restart sing-box.service' "$TEST_ROOT/systemctl.log"
 grep -q -- '--user restart mihomo.service' "$TEST_ROOT/systemctl.log"
 grep -q 'disable --now mihomo.service' "$TEST_ROOT/systemctl.log"
+grep -q 'luneth90.omamigrate' "$TEST_ROOT/home/.config/omarchy/shell.json"
+grep -q 'other.plugin' "$TEST_ROOT/home/.config/omarchy/shell.json"
 
 echo "Restore two-run convergence test passed."
