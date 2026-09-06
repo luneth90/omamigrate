@@ -10,11 +10,11 @@ LIB_DIR="$(cd "${BIN_DIR}/../lib" && pwd)"
 source "${LIB_DIR}/core.sh"
 source "${LIB_DIR}/ai-state.sh"
 
-VERSION="1.0.0"
+VERSION="1.1.0"
 
 show_help() {
-  cat << 'HELP_TXT'
-OmaMigrate v1.0.0
+  cat << HELP_TXT
+OmaMigrate v${VERSION}
 Move apps, AI credentials, proxy services, system configurations, and workflows between Omarchy machines.
 
 Usage:
