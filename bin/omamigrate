@@ -49,8 +49,8 @@ Usage:
 Create a portable migration backup for another Omarchy machine.
 
 Options:
-  --standard         Create the recommended backup without AI histories or plugins (~25MB)
-  --complete         Create a complete backup including AI histories, sessions, and plugins (~650MB+)
+  --standard         Create the recommended backup without AI histories or plugins
+  --complete         Include AI histories, sessions, and plugins; size depends on local data
   --with-ai-history  Include AI histories, sessions, and plugins; equivalent to --complete
   -h, --help         Show this help message
 

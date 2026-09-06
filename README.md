@@ -137,7 +137,7 @@ Press `SUPER + CTRL + M` anywhere on your Omarchy desktop to summon the OmaMigra
 
 1. **📦 Step 1: Create a Migration Backup**
    - Click the first button to filter hardware drivers and capture packages, AI tools and credentials, proxy services, dotfiles, and system configurations into `~/omamigrate-backup.tar.gz`.
-   - Choose **Standard** (~25MB, recommended) for apps, AI credentials, proxy services, and configurations, or **Complete** (~650MB+) to add AI chat histories, sessions, and plugins.
+   - Choose **Standard** (recommended) for apps, AI credentials, proxy services, and configurations. Choose **Complete** to also include AI chat histories, sessions, and plugins; the backup may be large depending on your local data.
 2. **📡 Step 2: Beam via LocalSend**
    - Click the second button to launch LocalSend and wireless beam the package directly to `~/Downloads` on your new computer.
 3. **⚡ Step 3: One-Click Restore on New Machine**
@@ -158,10 +158,10 @@ cd ~/omarchy-restore && ./restore.sh
 OmaMigrate also ships with a fully featured CLI for headless or script-driven environments:
 
 ```bash
-# Standard migration backup (~25MB, recommended)
+# Standard migration backup (recommended)
 omamigrate backup [custom-output.tar.gz]
 
-# Complete migration backup with AI histories & plugins (~650MB+)
+# Complete migration backup with AI histories and plugins; size depends on local data
 omamigrate backup --with-ai-history [custom-output.tar.gz]
 
 # Send a migration backup via LocalSend

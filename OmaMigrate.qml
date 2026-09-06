@@ -685,7 +685,7 @@ Item {
               color: "#6c7086"
             }
 
-            // Explicit backup types keep the size separate from an additive checkbox.
+            // Explicit backup types distinguish scope without unreliable size estimates.
             RowLayout {
               visible: !root.isProcessing
               Layout.fillWidth: true
@@ -727,7 +727,7 @@ Item {
                     Item { Layout.fillWidth: true }
 
                     Text {
-                      text: "~25 MB"
+                      text: "Recommended"
                       font.pixelSize: 10
                       font.bold: true
                       color: "#a6e3a1"
@@ -744,7 +744,7 @@ Item {
 
                   Text {
                     Layout.fillWidth: true
-                    text: "Recommended · excludes AI history and plugins"
+                    text: "Excludes AI history and plugins"
                     font.pixelSize: 9
                     color: "#585b70"
                     elide: Text.ElideRight
@@ -796,7 +796,7 @@ Item {
                     Item { Layout.fillWidth: true }
 
                     Text {
-                      text: "~650 MB"
+                      text: "May be large"
                       font.pixelSize: 10
                       font.bold: true
                       color: "#fab387"
@@ -813,7 +813,7 @@ Item {
 
                   Text {
                     Layout.fillWidth: true
-                    text: "Adds AI chat history, sessions, and plugins"
+                    text: "Includes AI history, sessions, and plugins"
                     font.pixelSize: 9
                     color: "#585b70"
                     elide: Text.ElideRight

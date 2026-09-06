@@ -124,7 +124,7 @@ omarchy restart shell
 
 1. **📦 步骤一：创建迁移备份 (Backup)**
    - 点击界面第 1 个按钮，自动完成显式软件清单提取、硬件黑名单过滤、配置与凭证归档；
-   - 选择 **Standard**（约 25MB，推荐）迁移应用、AI 凭据、代理服务及配置；选择 **Complete**（约 650MB+）可额外包含 AI 对话历史、会话和插件；
+   - 选择 **Standard**（推荐）迁移应用、AI 凭据、代理服务及配置；选择 **Complete** 可额外包含 AI 对话历史、会话和插件，备份可能较大，具体取决于本地数据量；
    - 打包完成后在主目录生成 `~/omamigrate-backup.tar.gz`。
 2. **📡 步骤二：隔空快传 (Beam via LocalSend)**
    - 点击界面第 2 个按钮直接拉起 LocalSend，将压缩包无线投送到新电脑的 `~/Downloads` 目录。
@@ -146,10 +146,10 @@ cd ~/omarchy-restore && ./restore.sh
 插件已内置了完整的 CLI 命令行接口，若您偏好在终端中纯命令行执行：
 
 ```bash
-# 默认轻量打包（仅配置与凭证，~25MB，秒传首选）
+# 默认轻量打包（仅配置与凭证，推荐）
 omamigrate backup [自定义输出路径.tar.gz]
 
-# 包含全量 AI 聊天历史与插件 (~650MB+)
+# 包含全量 AI 聊天历史与插件，大小取决于本地数据量
 omamigrate backup --with-ai-history [自定义输出路径.tar.gz]
 
 # 调起 LocalSend 发送
