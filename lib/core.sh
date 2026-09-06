@@ -35,6 +35,7 @@ CONFIG_TARGETS=(
   "fcitx5"
   "btop"
   "git"
+  "gh"
   "lazygit"
   "starship.toml"
   "systemd"

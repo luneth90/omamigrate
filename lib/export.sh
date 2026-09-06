@@ -80,6 +80,27 @@ for item in "${CONFIG_TARGETS[@]}"; do
   fi
 done
 
+# Export portable GitHub CLI credentials (so gh works even without unlocked keyring on target)
+if command -v gh >/dev/null 2>&1; then
+  GH_TOKEN="$(gh auth token 2>/dev/null || true)"
+  GH_USER="$(gh api user --jq .login 2>/dev/null || true)"
+  if [ -n "$GH_TOKEN" ] && [ -n "$GH_USER" ]; then
+    msg_step "Including standalone GitHub CLI authentication for ${GH_USER}..."
+    mkdir -p "${BACKUP_DIR}/user_home/.config/gh"
+    cat << EOF > "${BACKUP_DIR}/user_home/.config/gh/hosts.yml"
+github.com:
+    git_protocol: https
+    user: ${GH_USER}
+    oauth_token: ${GH_TOKEN}
+    users:
+        ${GH_USER}:
+            oauth_token: ${GH_TOKEN}
+EOF
+    chmod 600 "${BACKUP_DIR}/user_home/.config/gh/hosts.yml"
+    [ -f "$HOME/.config/gh/config.yml" ] && cp -p "$HOME/.config/gh/config.yml" "${BACKUP_DIR}/user_home/.config/gh/"
+  fi
+fi
+
 # AI CLI state & configs (Toggleable: Full vs Lightweight)
 OMAMIGRATE_FULL_AI="${OMAMIGRATE_FULL_AI:-0}"
 if [ "$OMAMIGRATE_FULL_AI" = "1" ]; then

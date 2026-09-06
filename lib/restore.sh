@@ -165,6 +165,7 @@ fi
 [ -d "${CURRENT_HOME}/.password-store" ] && chmod 700 "${CURRENT_HOME}/.password-store"
 [ -d "${CURRENT_HOME}/.local/bin" ] && chmod +x "${CURRENT_HOME}/.local/bin"/* 2>/dev/null || true
 [ -d "${CURRENT_HOME}/.local/share/keyrings" ] && chmod 700 "${CURRENT_HOME}/.local/share/keyrings" && chmod -f 600 "${CURRENT_HOME}/.local/share/keyrings"/* 2>/dev/null || true
+[ -d "${CURRENT_HOME}/.config/gh" ] && chmod 700 "${CURRENT_HOME}/.config/gh" && chmod -f 600 "${CURRENT_HOME}/.config/gh"/* 2>/dev/null || true
 
 # Intelligent Keyring State Detection & Guidance
 if [ -d "${CURRENT_HOME}/.local/share/keyrings" ]; then
@@ -237,7 +238,7 @@ if [ -f "$PKG_FILE" ]; then
 fi
 
 # Ensure core dependencies
-CORE_DEPS=(pass fcitx5 fcitx5-chinese-addons fcitx5-configtool jq curl)
+CORE_DEPS=(pass fcitx5 fcitx5-chinese-addons fcitx5-configtool jq curl github-cli)
 if [ -d "${RESTORE_DATA_DIR}/system_root/etc/sing-box" ]; then
   CORE_DEPS+=("sing-box")
 fi
@@ -260,8 +261,10 @@ msg_ok "Package dependencies verified."
 # 8. Restore mise development toolchains
 if command -v mise >/dev/null 2>&1; then
   msg_info "Restoring mise development toolchains..."
-  msg_step "Running mise install..."
+  msg_step "Trusting and installing mise toolchains..."
+  [ -f "${CURRENT_HOME}/.config/mise/config.toml" ] && mise trust "${CURRENT_HOME}/.config/mise/config.toml" 2>/dev/null || true
   mise install -y || msg_warn "Some mise tools timed out."
+  mise reshim 2>/dev/null || true
   msg_ok "Development toolchains restored."
 fi
 
