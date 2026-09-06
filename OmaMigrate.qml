@@ -1523,16 +1523,18 @@ Item {
     id: scanArchiveProcess
     command: [
       "bash", "-c",
+      "files=();\n" +
+      "while IFS= read -r -d '' f; do\n" +
+      "  files+=(\"$f\");\n" +
+      "done < <(find \"$HOME/Downloads\" -maxdepth 2 -type f -name '*.tar.gz' -print0 2>/dev/null | sort -z);\n" +
       "echo '[';\n" +
-      "first=1;\n" +
-      "find \"$HOME/Downloads\" -maxdepth 2 -type f -name '*.tar.gz' -printf '%T@ %p\\n' 2>/dev/null | sort -rn | head -n 20 | while IFS= read -r line; do\n" +
-      "  f=\"${line#* }\";\n" +
-      "  [ -f \"$f\" ] || continue;\n" +
+      "for i in \"${!files[@]}\"; do\n" +
+      "  f=\"${files[$i]}\";\n" +
       "  name=$(basename \"$f\");\n" +
       "  size=$(du -h \"$f\" 2>/dev/null | cut -f1);\n" +
-      "  ts=$(stat -c '%Y' \"$f\" 2>/dev/null);\n" +
+      "  ts=$(stat -c '%Y' \"$f\" 2>/dev/null || echo 0);\n" +
       "  datestr=$(date -d @\"$ts\" '+%m/%d %H:%M' 2>/dev/null || echo 'unknown');\n" +
-      "  [ $first -eq 1 ] && first=0 || printf ',';\n" +
+      "  [ \"$i\" -gt 0 ] && printf ',';\n" +
       "  printf '{\"name\":\"%s\",\"path\":\"%s\",\"size\":\"%s\",\"date\":\"%s\"}' \"$name\" \"$f\" \"$size\" \"$datestr\";\n" +
       "done;\n" +
       "echo ']';\n"
