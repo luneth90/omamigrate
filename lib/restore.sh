@@ -135,12 +135,16 @@ fi
 OLD_HOME="$(cat "${RESTORE_DATA_DIR}/pkg_meta/source_home.txt" 2>/dev/null || true)"
 if [ -n "${OLD_HOME}" ] && [ "${CURRENT_HOME}" != "${OLD_HOME}" ]; then
   msg_info "Adapting username paths (${OLD_HOME} -> ${CURRENT_HOME})..."
-  msg_step "Translating AI and CLI agent configs..."
+  msg_step "Translating AI, shell profiles and CLI agent configs..."
   [ -f "${CURRENT_HOME}/.codex/config.toml" ] && sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" "${CURRENT_HOME}/.codex/config.toml"
   [ -f "${CURRENT_HOME}/.claude.json" ] && sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" "${CURRENT_HOME}/.claude.json"
   [ -f "${CURRENT_HOME}/.gemini/antigravity-cli/settings.json" ] && sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" "${CURRENT_HOME}/.gemini/antigravity-cli/settings.json"
   [ -f "${CURRENT_HOME}/.config/git/config" ] && sed -i "s|!${OLD_HOME}.*gh auth git-credential|!gh auth git-credential|g" "${CURRENT_HOME}/.config/git/config"
   [ -f "${CURRENT_HOME}/.ssh/config" ] && sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" "${CURRENT_HOME}/.ssh/config"
+  [ -f "${CURRENT_HOME}/.bashrc" ] && sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" "${CURRENT_HOME}/.bashrc"
+  [ -f "${CURRENT_HOME}/.bash_profile" ] && sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" "${CURRENT_HOME}/.bash_profile"
+  [ -f "${CURRENT_HOME}/.profile" ] && sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" "${CURRENT_HOME}/.profile"
+  [ -f "${CURRENT_HOME}/.zshrc" ] && sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" "${CURRENT_HOME}/.zshrc"
   [ -d "${CURRENT_HOME}/.thunderbird" ] && find "${CURRENT_HOME}/.thunderbird" -type f -name "*.ini" -exec sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" {} + 2>/dev/null || true
 
   msg_step "Translating proxy client paths..."
@@ -150,6 +154,16 @@ if [ -n "${OLD_HOME}" ] && [ "${CURRENT_HOME}" != "${OLD_HOME}" ]; then
         -exec sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" {} + 2>/dev/null || true
     fi
   done
+
+  msg_step "Adapting user symlinks pointing to old home..."
+  find "${CURRENT_HOME}/.config" "${CURRENT_HOME}/.local" -maxdepth 4 -type l 2>/dev/null | while IFS= read -r symlink; do
+    target="$(readlink "$symlink" 2>/dev/null || true)"
+    if [[ "$target" == "${OLD_HOME}"* ]]; then
+      new_target="${CURRENT_HOME}${target#${OLD_HOME}}"
+      ln -snf "$new_target" "$symlink" 2>/dev/null || true
+    fi
+  done
+
   msg_ok "Username paths adapted successfully."
 fi
 
@@ -243,8 +257,22 @@ if [ -f "$PKG_FILE" ]; then
       msg_step "Installing missing packages with omarchy pkg..."
       omarchy pkg add "${MISSING_PKGS[@]}" || $ELEVATOR pacman -S --needed --noconfirm "${MISSING_PKGS[@]}" || true
     else
-      msg_step "Installing missing packages with pacman..."
-      $ELEVATOR pacman -S --needed --noconfirm "${MISSING_PKGS[@]}" || true
+      msg_step "Installing native packages with pacman..."
+      NATIVE_PKGS=()
+      AUR_PKGS=()
+      for pkg in "${MISSING_PKGS[@]}"; do
+        if pacman -Si "$pkg" >/dev/null 2>&1; then
+          NATIVE_PKGS+=("$pkg")
+        else
+          AUR_PKGS+=("$pkg")
+        fi
+      done
+      if [ ${#NATIVE_PKGS[@]} -gt 0 ]; then
+        $ELEVATOR pacman -S --needed --noconfirm "${NATIVE_PKGS[@]}" || true
+      fi
+      if [ ${#AUR_PKGS[@]} -gt 0 ]; then
+        msg_warn "Some packages require an AUR helper (yay) to install: ${AUR_PKGS[*]}"
+      fi
     fi
   else
     msg_ok "All required packages are already installed."
@@ -272,6 +300,19 @@ if [ ${#CORE_MISSING[@]} -gt 0 ]; then
 fi
 msg_ok "Package dependencies verified."
 
+# Post-install system permissions enforcement (guarantees correct state regardless of restore count)
+if [ -d "/etc/sing-box" ]; then
+  msg_step "Enforcing sing-box configuration permissions and group access..."
+  if getent group sing-box >/dev/null 2>&1; then
+    $ELEVATOR chown -R root:sing-box "/etc/sing-box" 2>/dev/null || true
+    $ELEVATOR usermod -aG sing-box "$CURRENT_USER" 2>/dev/null || true
+    find /etc/sing-box -type f -name "*.json" -exec $ELEVATOR chmod 640 {} + 2>/dev/null || true
+    $ELEVATOR chmod 750 /etc/sing-box 2>/dev/null || true
+  else
+    find /etc/sing-box -type f -name "*.json" -exec $ELEVATOR chmod 644 {} + 2>/dev/null || true
+  fi
+fi
+
 # 8. Restore mise development toolchains
 if command -v mise >/dev/null 2>&1; then
   msg_info "Restoring mise development toolchains..."
@@ -287,16 +328,22 @@ msg_info "Activating system background services and timers..."
 $ELEVATOR systemctl daemon-reload
 
 for srv in sing-box mihomo v2raya xray v2ray daed; do
-  if [ -d "${RESTORE_DATA_DIR}/system_root/etc/$srv" ] || [ -f "/etc/systemd/system/${srv}.service" ]; then
-    if command -v "$srv" >/dev/null 2>&1; then
-      msg_step "Enabling $srv service..."
-      $ELEVATOR systemctl enable --now "${srv}.service" 2>/dev/null || true
+  if [ -d "${RESTORE_DATA_DIR}/system_root/etc/$srv" ] || [ -f "${RESTORE_DATA_DIR}/system_root/etc/systemd/system/${srv}.service" ]; then
+    if command -v "$srv" >/dev/null 2>&1 || systemctl list-unit-files "${srv}.service" >/dev/null 2>&1; then
+      msg_step "Enabling and restarting $srv service..."
+      $ELEVATOR systemctl reset-failed "${srv}.service" 2>/dev/null || true
+      $ELEVATOR systemctl enable "${srv}.service" 2>/dev/null || true
+      $ELEVATOR systemctl restart "${srv}.service" 2>/dev/null || true
     fi
   fi
 done
 
-if [ -f "/etc/systemd/system/sing-box-node-rotate.timer" ]; then
+if [ -f "${RESTORE_DATA_DIR}/system_root/etc/systemd/system/sing-box-node-rotate.timer" ]; then
   msg_step "Enabling sing-box-node-rotate timer..."
+  # Prevent systemd Persistent=true from immediately triggering node rotation during restore
+  $ELEVATOR mkdir -p /var/lib/systemd/timers 2>/dev/null || true
+  $ELEVATOR touch /var/lib/systemd/timers/stamp-sing-box-node-rotate.timer 2>/dev/null || true
+  $ELEVATOR systemctl reset-failed sing-box-node-rotate.timer 2>/dev/null || true
   $ELEVATOR systemctl enable --now sing-box-node-rotate.timer 2>/dev/null || true
 fi
 
@@ -304,6 +351,7 @@ fi
 systemctl --user daemon-reload
 if [ -f "${CURRENT_HOME}/.config/systemd/user/icloud-mail-triage.timer" ]; then
   msg_step "Enabling daily email triage timer..."
+  systemctl --user reset-failed icloud-mail-triage.timer 2>/dev/null || true
   systemctl --user enable --now icloud-mail-triage.timer 2>/dev/null || true
 fi
 msg_ok "Background services and timers activated."

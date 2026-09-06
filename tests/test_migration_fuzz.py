@@ -92,6 +92,31 @@ class TestMigrationParsers(unittest.TestCase):
         for c in candidates:
             self.assertTrue(bool(pattern.match(c)), f"Candidate {c} should match")
 
+    def test_symlink_adaptation(self):
+        old_home = "/home/olduser"
+        new_home = "/home/newuser"
+        target = "/home/olduser/.config/systemd/user/icloud-mail-triage.timer"
+        if target.startswith(old_home):
+            new_target = new_home + target[len(old_home):]
+        else:
+            new_target = target
+        self.assertEqual(new_target, "/home/newuser/.config/systemd/user/icloud-mail-triage.timer")
+
+    def test_temp_backup_file_filtering(self):
+        import re
+        pattern = re.compile(r"^.*(\.bak|\.bak\..*|~|\.tmp)$")
+        self.assertTrue(pattern.match("config.json.bak"))
+        self.assertTrue(pattern.match("config.json.bak.20260831-110110"))
+        self.assertTrue(pattern.match("config.json~"))
+        self.assertTrue(pattern.match("config.json.tmp"))
+        self.assertFalse(pattern.match("config.json"))
+        self.assertFalse(pattern.match("sing-box.service"))
+
+    def test_singbox_config_validity(self):
+        valid = '{"inbounds": [{"type": "tun"}], "outbounds": [{"tag": "proxy"}]}'
+        self.assertTrue(validate_singbox_config(valid))
+        invalid = '{"inbounds": "not-a-list"}'
+        self.assertFalse(validate_singbox_config(invalid))
 
 
 if __name__ == "__main__":
