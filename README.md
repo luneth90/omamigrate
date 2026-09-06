@@ -4,16 +4,20 @@
 
 > OmaMigrate creates portable backups of installed package lists, selected user configurations, AI credentials and optional session history, proxy and system service configurations, and automated workflows—then restores them on another Omarchy machine.
 
+[![CI](https://github.com/luneth90/omamigrate/actions/workflows/ci.yml/badge.svg)](https://github.com/luneth90/omamigrate/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/luneth90/omamigrate/actions/workflows/codeql.yml/badge.svg)](https://github.com/luneth90/omamigrate/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/luneth90/omamigrate/badge)](https://scorecard.dev/viewer/?uri=github.com/luneth90/omamigrate)
+[![Omarchy Marketplace](https://img.shields.io/badge/Omarchy%20Marketplace-listed-2ea44f?logo=omarchy)](https://plugins.omarchy.org/plugin.html?id=luneth90.omamigrate)
+[![GitHub Release](https://img.shields.io/github/v/release/luneth90/omamigrate?logo=github)](https://github.com/luneth90/omamigrate/releases)
+[![Platform](https://img.shields.io/badge/Platform-Omarchy%20%7C%20Arch%20Linux-blue?logo=archlinux)](https://omarchy.org/)
+[![Architecture](https://img.shields.io/badge/Arch-x86__64%20%7C%20aarch64-orange)](#hardware-agnostic-portability)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 > [!IMPORTANT]
 > **No telemetry. No cloud service. No automatic backup uploads.** OmaMigrate creates migration archives locally and never sends their contents to a developer-controlled server. The optional **Open LocalSend** action hands the archive to LocalSend for a direct transfer to a nearby device over your local network—not a cloud upload. Package managers and authenticated tools may still make their normal network requests.
 
 > [!WARNING]
 > Migration backups may contain SSH and GPG keys, AI login credentials, password stores, and desktop keyrings. Treat every archive as sensitive: transfer it only through trusted channels, restrict access, and delete unneeded copies securely.
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Omarchy%20%7C%20Arch%20Linux-blue?logo=archlinux)](https://omarchy.org/)
-[![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](CHANGELOG.md)
-[![Architecture](https://img.shields.io/badge/Arch-x86__64%20%7C%20aarch64-orange)](#hardware-agnostic-portability)
 
 <p align="center">
   <img src="preview.png" alt="OmaMigrate backup interface" width="720">

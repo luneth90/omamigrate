@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, feat/*, fix/*, docs/* ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test & Verification
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+      options: --init
+    steps:
+      - name: Install system dependencies
+        run: |
+          pacman -Sy --noconfirm archlinux-keyring
+          pacman -S --noconfirm --needed git jq ripgrep qt6-declarative qt6-base quickshell bash coreutils util-linux
+      - name: Create non-root test user
+        run: |
+          useradd -m -u 1001 runner
+          chmod 1777 /tmp
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Setup permissions
+        run: |
+          chown -R runner:runner "$GITHUB_WORKSPACE"
+      - name: Validate Plugin Manifest
+        run: |
+          jq -e '.schemaVersion == 1' manifest.json
+          jq -e '.id == "luneth90.omamigrate"' manifest.json
+          jq -e '.version != null' manifest.json
+          jq -e '(.kinds | length) > 0' manifest.json
+          jq -e '.entryPoints.overlay == "OmaMigrate.qml"' manifest.json
+          test -f OmaMigrate.qml
+      - name: Run Test Suite
+        run: |
+          su runner -c "./tests/test_syntax.sh"
+      - name: Lint QML Components
+        run: |
+          su runner -c "/usr/lib/qt6/bin/qmllint -I /usr/lib/qt6/qml OmaMigrate.qml"

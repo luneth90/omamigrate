@@ -1,0 +1,167 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to publish (e.g. v1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify Release Candidate
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+      options: --init
+    steps:
+      - name: Install system dependencies
+        run: |
+          pacman -Sy --noconfirm archlinux-keyring
+          pacman -S --noconfirm --needed git jq ripgrep qt6-declarative qt6-base quickshell bash coreutils util-linux
+
+      - name: Create non-root test user
+        run: |
+          useradd -m -u 1001 runner
+          chmod 1777 /tmp
+
+      - name: Resolve release tag and ref
+        id: release_ref
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+            REF="refs/tags/${TAG}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+            REF="${GITHUB_REF}"
+          fi
+          if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
+            echo "Error: Tag '${TAG}' must follow SemVer format 'vX.Y.Z'" >&2
+            exit 1
+          fi
+          VERSION="${TAG#v}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "ref=${REF}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ steps.release_ref.outputs.ref }}
+
+      - name: Setup permissions
+        run: |
+          chown -R runner:runner "$GITHUB_WORKSPACE"
+
+      - name: Validate Plugin Manifest
+        run: |
+          jq -e '.schemaVersion == 1' manifest.json
+          jq -e '.id == "luneth90.omamigrate"' manifest.json
+          jq -e '.version != null' manifest.json
+          jq -e '(.kinds | length) > 0' manifest.json
+          jq -e '.entryPoints.overlay == "OmaMigrate.qml"' manifest.json
+          test -f OmaMigrate.qml
+
+      - name: Validate manifest version matches tag
+        run: |
+          EXPECTED_VERSION="${{ steps.release_ref.outputs.version }}"
+          ACTUAL_VERSION="$(jq -r '.version' manifest.json)"
+          if [ "${EXPECTED_VERSION}" != "${ACTUAL_VERSION}" ]; then
+            echo "Error: manifest.json version (${ACTUAL_VERSION}) does not match tag version (${EXPECTED_VERSION})" >&2
+            exit 1
+          fi
+
+      - name: Validate changelog contains release entry
+        run: |
+          VERSION="${{ steps.release_ref.outputs.version }}"
+          if ! grep -q "^## \[${VERSION}\]" CHANGELOG.md; then
+            echo "Error: CHANGELOG.md has no release section for version [${VERSION}]" >&2
+            exit 1
+          fi
+
+      - name: Run Test Suite
+        run: |
+          su runner -c "./tests/test_syntax.sh"
+
+      - name: Lint QML Components
+        run: |
+          su runner -c "/usr/lib/qt6/bin/qmllint -I /usr/lib/qt6/qml OmaMigrate.qml"
+
+  publish:
+    name: Publish GitHub Release
+    needs: [verify]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Resolve release tag and ref
+        id: release_ref
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+            REF="refs/tags/${TAG}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+            REF="${GITHUB_REF}"
+          fi
+          VERSION="${TAG#v}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "ref=${REF}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ steps.release_ref.outputs.ref }}
+
+      - name: Extract release notes
+        id: changelog
+        run: |
+          VERSION="${{ steps.release_ref.outputs.version }}"
+          NOTES_FILE="release_notes.md"
+          awk -v ver="${VERSION}" '
+            $0 ~ "^## \\[" ver "\\]" { found=1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > "${NOTES_FILE}"
+
+          if [ ! -s "${NOTES_FILE}" ]; then
+            echo "Release ${VERSION} of OmaMigrate." > "${NOTES_FILE}"
+          fi
+
+      - name: Package distribution archive
+        id: package
+        run: |
+          TAG="${{ steps.release_ref.outputs.tag }}"
+          ARCHIVE="omamigrate-${TAG}.tar.gz"
+          tar --exclude-vcs \
+              --exclude='.github' \
+              --exclude='tests' \
+              --exclude='.*' \
+              -czvf "${ARCHIVE}" \
+              manifest.json OmaMigrate.qml bin lib LICENSE README.md README.zh-CN.md CHANGELOG.md SECURITY.md
+
+          sha256sum "${ARCHIVE}" > "${ARCHIVE}.sha256"
+          echo "archive=${ARCHIVE}" >> "$GITHUB_OUTPUT"
+          echo "checksum=${ARCHIVE}.sha256" >> "$GITHUB_OUTPUT"
+
+      - name: Publish Release to GitHub
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.release_ref.outputs.tag }}"
+          ARCHIVE="${{ steps.package.outputs.archive }}"
+          CHECKSUM="${{ steps.package.outputs.checksum }}"
+          NOTES_FILE="release_notes.md"
+
+          gh release create "${TAG}" "${ARCHIVE}" "${CHECKSUM}" \
+            --title "OmaMigrate ${TAG}" \
+            --notes-file "${NOTES_FILE}" \
+            --verify-tag

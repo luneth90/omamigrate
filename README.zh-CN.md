@@ -4,16 +4,20 @@
 
 > OmaMigrate 可将已安装软件包清单、选定的用户配置、AI 凭据及可选会话历史、代理与系统服务配置和自动化工作流打包，并恢复到另一台 Omarchy 设备。
 
+[![CI](https://github.com/luneth90/omamigrate/actions/workflows/ci.yml/badge.svg)](https://github.com/luneth90/omamigrate/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/luneth90/omamigrate/actions/workflows/codeql.yml/badge.svg)](https://github.com/luneth90/omamigrate/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/luneth90/omamigrate/badge)](https://scorecard.dev/viewer/?uri=github.com/luneth90/omamigrate)
+[![Omarchy Marketplace](https://img.shields.io/badge/Omarchy%20Marketplace-listed-2ea44f?logo=omarchy)](https://plugins.omarchy.org/plugin.html?id=luneth90.omamigrate)
+[![GitHub Release](https://img.shields.io/github/v/release/luneth90/omamigrate?logo=github)](https://github.com/luneth90/omamigrate/releases)
+[![Platform](https://img.shields.io/badge/Platform-Omarchy%20%7C%20Arch%20Linux-blue?logo=archlinux)](https://omarchy.org/)
+[![Architecture](https://img.shields.io/badge/Arch-x86__64%20%7C%20aarch64-orange)](#跨硬件架构智能兼容)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 > [!IMPORTANT]
 > **无遥测、无云端服务、不会自动上传恢复包。** OmaMigrate 在本地创建迁移恢复包，绝不会将其内容发送到开发者控制的服务器。可选的 **打开 LocalSend** 操作只会把恢复包交给 LocalSend，通过本地网络直接传输给附近设备，并非上传云端。软件包管理器和已登录的工具仍可能发起其正常网络请求。
 
 > [!WARNING]
 > 迁移恢复包可能包含 SSH/GPG 密钥、AI 登录凭据、密码库和桌面密钥环。请将每个恢复包视为敏感文件：仅通过可信渠道传输、限制访问权限，并安全删除不再需要的副本。
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Omarchy%20%7C%20Arch%20Linux-blue?logo=archlinux)](https://omarchy.org/)
-[![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](CHANGELOG.md)
-[![Architecture](https://img.shields.io/badge/Arch-x86__64%20%7C%20aarch64-orange)](#跨硬件架构智能兼容)
 
 <p align="center">
   <img src="preview.png" alt="OmaMigrate 备份界面" width="720">
