@@ -7,7 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/core.sh"
 
-OUTPUT_FILE="${1:-$HOME/omarchy-migration.tar.gz}"
+OUTPUT_FILE="${1:-$HOME/omamigrate-backup.tar.gz}"
 
 STAGING_BASE="${XDG_CACHE_HOME:-$HOME/.cache}/omamigrate"
 mkdir -p "$STAGING_BASE"
@@ -23,7 +23,7 @@ if [ -n "${OMAMIGRATE_SUDO_PASS:-}" ]; then
   unset OMAMIGRATE_SUDO_PASS
 fi
 
-msg_info "Starting OmaMigrate Export..."
+msg_info "Creating OmaMigrate migration backup..."
 msg_step "Creating staging directory: ${BACKUP_DIR}"
 mkdir -p "${BACKUP_DIR}/user_home"
 mkdir -p "${BACKUP_DIR}/system_root"
@@ -35,7 +35,7 @@ pacman -Qqe | grep -vE "${HW_EXCLUDE_REGEX}" > "${BACKUP_DIR}/pkg_meta/packages_
 pacman -Qqem > "${BACKUP_DIR}/pkg_meta/packages_aur.txt" 2>/dev/null || true
 echo "$HOME" > "${BACKUP_DIR}/pkg_meta/source_home.txt"
 echo "$(id -un)" > "${BACKUP_DIR}/pkg_meta/source_user.txt"
-msg_ok "Exported $(wc -l < "${BACKUP_DIR}/pkg_meta/packages_explicit.txt") explicit packages (hardware drivers excluded)"
+msg_ok "Recorded $(wc -l < "${BACKUP_DIR}/pkg_meta/packages_explicit.txt") explicit packages (hardware drivers excluded)"
 
 # 2. Export User Dotfiles & Credentials
 msg_info "Archiving user dotfiles and authentication credentials..."
@@ -253,4 +253,4 @@ chmod +x "${BACKUP_DIR}/restore.sh"
 msg_info "Creating final archive at ${OUTPUT_FILE}..."
 tar -czf "${OUTPUT_FILE}" -C "${BACKUP_DIR}" .
 
-msg_ok "Archive created successfully: ${OUTPUT_FILE} ($(du -h "${OUTPUT_FILE}" | cut -f1))"
+msg_ok "Migration backup created successfully: ${OUTPUT_FILE} ($(du -h "${OUTPUT_FILE}" | cut -f1))"

@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "author": "luneth90",
   "license": "MIT",
-  "description": "One-click whole-system ecosystem & environment migration tool for Omarchy Linux — transfer apps, configs, services, and AI credentials seamlessly.",
+  "description": "Portable Omarchy migration backups for apps, AI credentials, proxy services, system configurations, and automated workflows.",
   "kinds": [
     "overlay"
   ],

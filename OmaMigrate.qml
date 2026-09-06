@@ -113,7 +113,7 @@ Item {
   function startExport() {
     root.showPasswordPrompt = false
     root.isProcessing = true
-    root.statusText = "Packaging system..."
+    root.statusText = "Creating migration backup..."
     var pass = root.savedPassword || root.inputPassword
     root.savedPassword = ""
     root.inputPassword = ""
@@ -129,7 +129,7 @@ Item {
 
   function startRestore() {
     if (!root.selectedArchive) {
-      root.statusText = "Error: No archive selected."
+      root.statusText = "Error: No backup selected."
       return
     }
     root.showPasswordPrompt = false
@@ -235,7 +235,7 @@ Item {
     Rectangle {
       id: card
       width: 480
-      height: root.currentMode === "restore" && !root.showPasswordPrompt ? 420 : 360
+      height: root.showPasswordPrompt ? 360 : ((root.currentMode === "restore" || root.exportStep === 1) ? 420 : 360)
       radius: 14
       color: "#1e1e2e"
       border.color: root.lockWarningActive ? "#f38ba8" : (root.isProcessing ? (root.currentMode === "export" ? "#89b4fa" : "#cba6f7") : "#313244")
@@ -350,7 +350,7 @@ Item {
           }
         }
 
-        // Mode Switcher (Export / Restore)
+        // Mode Switcher (Backup / Restore)
         Rectangle {
           visible: !root.showPasswordPrompt
           Layout.fillWidth: true
@@ -366,7 +366,7 @@ Item {
             anchors.margins: 3
             spacing: 4
 
-            // Export Tab
+            // Backup Tab
             Rectangle {
               Layout.fillWidth: true
               Layout.fillHeight: true
@@ -375,7 +375,7 @@ Item {
 
               Text {
                 anchors.centerIn: parent
-                text: "📦 Export"
+                text: "📦 Backup"
                 font.pixelSize: 12
                 font.bold: root.currentMode === "export"
                 color: root.currentMode === "export" ? "#cdd6f4" : "#6c7086"
@@ -462,7 +462,7 @@ Item {
 
           Text {
             text: root.pendingAction === "export"
-              ? "System password required to archive protected configs (/etc/sing-box)."
+              ? "System password required to include protected configs (/etc/sing-box) in the backup."
               : "System password required to install packages and configure system services."
             font.pixelSize: 12
             color: "#a6adc8"
@@ -608,14 +608,14 @@ Item {
             }
 
             Text {
-              text: "Package System Environment"
+              text: "Create a Migration Backup"
               font.pixelSize: 15
               font.bold: true
               color: "#cdd6f4"
             }
 
             Text {
-              text: "Includes installed apps, daemons, configs, and AI developer credentials."
+              text: "Move apps, AI tools and credentials, proxy services, system configurations, and automated workflows to another Omarchy machine."
               font.pixelSize: 12
               color: "#a6adc8"
               wrapMode: Text.WordWrap
@@ -624,7 +624,7 @@ Item {
 
             Item { height: 2 }
 
-            // Prominent Packaging In Progress Line (shown when active)
+            // Prominent Backup In Progress Line (shown when active)
             Rectangle {
               visible: root.isProcessing
               Layout.fillWidth: true
@@ -660,7 +660,7 @@ Item {
 
                   Text {
                     Layout.fillWidth: true
-                    text: (root.statusText && root.statusText !== "Ready") ? root.statusText : "Packaging in progress..."
+                    text: (root.statusText && root.statusText !== "Ready") ? root.statusText : "Creating migration backup..."
                     font.pixelSize: 13
                     font.bold: true
                     color: "#89b4fa"
@@ -677,84 +677,156 @@ Item {
               }
             }
 
-            // AI Chat History Option Card
-            Rectangle {
+            Text {
+              visible: !root.isProcessing
+              text: "BACKUP TYPE"
+              font.pixelSize: 10
+              font.bold: true
+              color: "#6c7086"
+            }
+
+            // Explicit backup types keep the size separate from an additive checkbox.
+            RowLayout {
               visible: !root.isProcessing
               Layout.fillWidth: true
-              height: 48
-              radius: 8
-              color: root.includeAiHistory ? "#1e1e2e" : "#181825"
-              border.color: aiHistoryMouse.containsMouse ? "#89b4fa" : (root.includeAiHistory ? "#89b4fa" : "#313244")
-              border.width: 1
+              spacing: 8
 
-              RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: 12
-                anchors.rightMargin: 12
-                spacing: 10
+              Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 76
+                radius: 8
+                color: !root.includeAiHistory ? "#1e1e2e" : "#181825"
+                border.color: standardBackupMouse.containsMouse || !root.includeAiHistory ? "#89b4fa" : "#313244"
+                border.width: 1
 
-                // Custom Checkbox
-                Rectangle {
-                  width: 20
-                  height: 20
-                  radius: 5
-                  color: root.includeAiHistory ? "#89b4fa" : "transparent"
-                  border.color: root.includeAiHistory ? "#89b4fa" : "#585b70"
-                  border.width: 1.5
+                ColumnLayout {
+                  anchors.fill: parent
+                  anchors.margins: 10
+                  spacing: 3
+
+                  RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 6
+
+                    Rectangle {
+                      Layout.preferredWidth: 14
+                      Layout.preferredHeight: 14
+                      radius: 7
+                      color: !root.includeAiHistory ? "#89b4fa" : "transparent"
+                      border.color: !root.includeAiHistory ? "#89b4fa" : "#585b70"
+                      border.width: 1.5
+                    }
+
+                    Text {
+                      text: "Standard"
+                      font.pixelSize: 11
+                      font.bold: true
+                      color: !root.includeAiHistory ? "#cdd6f4" : "#a6adc8"
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    Text {
+                      text: "~25 MB"
+                      font.pixelSize: 10
+                      font.bold: true
+                      color: "#a6e3a1"
+                    }
+                  }
 
                   Text {
-                    anchors.centerIn: parent
-                    visible: root.includeAiHistory
-                    text: "✓"
-                    font.pixelSize: 13
-                    font.bold: true
-                    color: "#11111b"
+                    Layout.fillWidth: true
+                    text: "Apps, AI credentials, proxies, and configs"
+                    font.pixelSize: 9
+                    color: "#a6adc8"
+                    elide: Text.ElideRight
+                  }
+
+                  Text {
+                    Layout.fillWidth: true
+                    text: "Recommended · excludes AI history and plugins"
+                    font.pixelSize: 9
+                    color: "#585b70"
+                    elide: Text.ElideRight
                   }
                 }
 
-                ColumnLayout {
-                  Layout.fillWidth: true
-                  spacing: 2
-
-                  RowLayout {
-                    spacing: 6
-                    Text {
-                      text: "包含完整 AI 对话历史与插件"
-                      font.pixelSize: 12
-                      font.bold: true
-                      color: root.includeAiHistory ? "#cdd6f4" : "#a6adc8"
-                    }
-                    Rectangle {
-                      height: 16
-                      width: root.includeAiHistory ? 54 : 46
-                      radius: 4
-                      color: root.includeAiHistory ? "#45475a" : "#313244"
-                      Text {
-                        anchors.centerIn: parent
-                        text: root.includeAiHistory ? "~650 MB" : "~25 MB"
-                        font.pixelSize: 9
-                        font.bold: true
-                        color: root.includeAiHistory ? "#fab387" : "#a6e3a1"
-                      }
-                    }
-                  }
-
-                  Text {
-                    text: root.includeAiHistory ? "包含 Claude/Codex/Grok/Gemini 历史会话与编译二进制" : "默认极简模式：仅保留登录凭证与配置，传输快 20 倍"
-                    font.pixelSize: 10
-                    color: "#6c7086"
-                    elide: Text.ElideRight
-                    Layout.fillWidth: true
-                  }
+                MouseArea {
+                  id: standardBackupMouse
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.includeAiHistory = false
                 }
               }
 
-              MouseArea {
-                id: aiHistoryMouse
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root.includeAiHistory = !root.includeAiHistory
+              Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 76
+                radius: 8
+                color: root.includeAiHistory ? "#1e1e2e" : "#181825"
+                border.color: completeBackupMouse.containsMouse || root.includeAiHistory ? "#89b4fa" : "#313244"
+                border.width: 1
+
+                ColumnLayout {
+                  anchors.fill: parent
+                  anchors.margins: 10
+                  spacing: 3
+
+                  RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 6
+
+                    Rectangle {
+                      Layout.preferredWidth: 14
+                      Layout.preferredHeight: 14
+                      radius: 7
+                      color: root.includeAiHistory ? "#89b4fa" : "transparent"
+                      border.color: root.includeAiHistory ? "#89b4fa" : "#585b70"
+                      border.width: 1.5
+                    }
+
+                    Text {
+                      text: "Complete"
+                      font.pixelSize: 11
+                      font.bold: true
+                      color: root.includeAiHistory ? "#cdd6f4" : "#a6adc8"
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    Text {
+                      text: "~650 MB"
+                      font.pixelSize: 10
+                      font.bold: true
+                      color: "#fab387"
+                    }
+                  }
+
+                  Text {
+                    Layout.fillWidth: true
+                    text: "Everything in Standard"
+                    font.pixelSize: 9
+                    color: "#a6adc8"
+                    elide: Text.ElideRight
+                  }
+
+                  Text {
+                    Layout.fillWidth: true
+                    text: "Adds AI chat history, sessions, and plugins"
+                    font.pixelSize: 9
+                    color: "#585b70"
+                    elide: Text.ElideRight
+                  }
+                }
+
+                MouseArea {
+                  id: completeBackupMouse
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.includeAiHistory = true
+                }
               }
             }
 
@@ -814,14 +886,14 @@ Item {
             }
 
             Text {
-              text: "✓ Backup Ready: ~/omarchy-migration.tar.gz"
+              text: "✓ Migration Backup Created: ~/omamigrate-backup.tar.gz"
               font.pixelSize: 13
               font.bold: true
               color: "#a6e3a1"
             }
 
             Text {
-              text: "Beam the archive wirelessly to your target machine using LocalSend."
+              text: "Send this backup wirelessly to your target machine using LocalSend."
               font.pixelSize: 12
               color: "#a6adc8"
               wrapMode: Text.WordWrap
@@ -982,7 +1054,7 @@ Item {
             }
 
             Text {
-              text: "✗ Packaging Interrupted or Failed"
+              text: "✗ Backup Interrupted or Failed"
               font.pixelSize: 15
               font.bold: true
               color: "#f38ba8"
@@ -1112,7 +1184,7 @@ Item {
             }
 
             Text {
-              text: "Select Migration Archive"
+              text: "Select a Migration Backup"
               font.pixelSize: 15
               font.bold: true
               color: "#cdd6f4"
@@ -1120,14 +1192,14 @@ Item {
 
             Text {
               visible: !root.isProcessing
-              text: "Choose an OmaMigrate archive from your Downloads folder"
+              text: "Choose a migration backup from your Downloads folder"
               font.pixelSize: 11
               color: "#6c7086"
             }
 
             Text {
               visible: !root.isProcessing
-              text: "Only Downloads archives named with “migration” or “migrate” are shown"
+              text: "Only backup files named with “migration” or “migrate” are shown"
               font.pixelSize: 10
               color: "#585b70"
             }
@@ -1217,7 +1289,7 @@ Item {
 
                   Text {
                     Layout.alignment: Qt.AlignHCenter
-                    text: root.archiveScanError || "No OmaMigrate archives found in Downloads"
+                    text: root.archiveScanError || "No migration backups found in Downloads"
                     font.pixelSize: 12
                     color: root.archiveScanError ? "#f38ba8" : "#6c7086"
                   }
@@ -1337,7 +1409,7 @@ Item {
 
               Text {
                 anchors.centerIn: parent
-                text: root.selectedArchive ? "⚡ Start Restore" : "Select an archive above"
+                text: root.selectedArchive ? "⚡ Restore from Backup" : "Select a backup above"
                 font.pixelSize: 13
                 font.bold: true
                 color: root.selectedArchive ? "#11111b" : "#6c7086"
@@ -1456,7 +1528,7 @@ Item {
             }
 
             Text {
-              text: "Please verify that the archive file is valid and password was entered correctly."
+              text: "Please verify that the backup file is valid and the password was entered correctly."
               font.pixelSize: 11
               color: "#a6adc8"
               wrapMode: Text.WordWrap
@@ -1550,12 +1622,12 @@ Item {
         } catch(e) {
           root.archiveFiles = []
           root.selectedArchive = ""
-          root.archiveScanError = "Could not read archive list"
+          root.archiveScanError = "Could not read the backup list"
         }
       }
     }
     onExited: function(code) {
-      if (code !== 0) root.archiveScanError = "Archive scan failed (code " + code + ")"
+      if (code !== 0) root.archiveScanError = "Backup scan failed (code " + code + ")"
     }
   }
 
@@ -1647,12 +1719,12 @@ Item {
       root.isProcessing = false
       if (code === 0) {
         root.exportStep = 2
-        root.statusText = "Backup ready: ~/omarchy-migration.tar.gz"
+        root.statusText = "Migration backup created: ~/omamigrate-backup.tar.gz"
         root.scanArchives()
       } else {
         root.exportStep = 4
-        if (!root.statusText || root.statusText === "Packaging in progress..." || root.statusText === "Packaging system...") {
-          root.statusText = "Export process failed or was interrupted (code " + code + ")."
+        if (!root.statusText || root.statusText === "Creating migration backup...") {
+          root.statusText = "Backup failed or was interrupted (code " + code + ")."
         }
         root.scanArchives()
       }
@@ -1661,7 +1733,7 @@ Item {
 
   Process {
     id: sendProcess
-    command: ["bash", "-c", "\"" + root.cliPath + "\" send \"$HOME/omarchy-migration.tar.gz\""]
+    command: ["bash", "-c", "\"" + root.cliPath + "\" send \"$HOME/omamigrate-backup.tar.gz\""]
     onExited: function() {
       root.exportStep = 3
       root.statusText = "LocalSend launched."

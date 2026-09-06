@@ -135,9 +135,9 @@ omarchy restart shell
 
 Press `SUPER + CTRL + M` anywhere on your Omarchy desktop to summon the OmaMigrate HUD:
 
-1. **📦 Step 1: Export & Package System**
-   - Click the first button to filter hardware drivers, capture packages, dotfiles, services, and credentials into `~/omarchy-migration.tar.gz`.
-   - **Smart Lightweight Mode & Toggle**: By default, OmaMigrate creates a streamlined archive (~25MB) preserving all apps, configs, and zero-login credentials. Check **"Include full AI chat histories & plugins"** if you wish to transfer hundreds of megabytes of past LLM conversation logs and plugins (~650MB+).
+1. **📦 Step 1: Create a Migration Backup**
+   - Click the first button to filter hardware drivers and capture packages, AI tools and credentials, proxy services, dotfiles, and system configurations into `~/omamigrate-backup.tar.gz`.
+   - Choose **Standard** (~25MB, recommended) for apps, AI credentials, proxy services, and configurations, or **Complete** (~650MB+) to add AI chat histories, sessions, and plugins.
 2. **📡 Step 2: Beam via LocalSend**
    - Click the second button to launch LocalSend and wireless beam the package directly to `~/Downloads` on your new computer.
 3. **⚡ Step 3: One-Click Restore on New Machine**
@@ -148,7 +148,7 @@ Press `SUPER + CTRL + M` anywhere on your Omarchy desktop to summon the OmaMigra
 If your new computer has a fresh Omarchy installation without the OmaMigrate plugin installed yet, you can restore directly using the standalone engine embedded inside the archive:
 
 ```bash
-mkdir -p ~/omarchy-restore && tar -xzf ~/Downloads/omarchy-migration.tar.gz -C ~/omarchy-restore
+mkdir -p ~/omarchy-restore && tar -xzf ~/Downloads/omamigrate-backup.tar.gz -C ~/omarchy-restore
 cd ~/omarchy-restore && ./restore.sh
 ```
 *The restore engine will install all applications, configure services, restore keyrings, and adapt configurations seamlessly.*
@@ -158,10 +158,10 @@ cd ~/omarchy-restore && ./restore.sh
 OmaMigrate also ships with a fully featured CLI for headless or script-driven environments:
 
 ```bash
-# Lightweight export (configs & credentials only, ~25MB, recommended)
+# Standard migration backup (~25MB, recommended)
 omamigrate export [custom-output.tar.gz]
 
-# Full export including complete AI chat histories & plugins (~650MB+)
+# Complete migration backup with AI histories & plugins (~650MB+)
 omamigrate export --with-history [custom-output.tar.gz]
 
 # Beam archive via LocalSend

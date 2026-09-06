@@ -122,10 +122,10 @@ omarchy restart shell
 
 按下 `SUPER + CTRL + M` 即可随时唤出 OmaMigrate 操作面板：
 
-1. **📦 步骤一：一键打包 (Export)**
+1. **📦 步骤一：创建迁移备份 (Backup)**
    - 点击界面第 1 个按钮，自动完成显式软件清单提取、硬件黑名单过滤、配置与凭证归档；
-   - **智能轻量化与可选勾选**：默认采用极简模式（约 25MB），仅同步应用配置与免登录凭据；如需连同所有历史会话一并转移，可勾选 **「包含完整 AI 对话历史与插件」**（约 650MB+）；
-   - 打包完成后在主目录生成 `~/omarchy-migration.tar.gz`。
+   - 选择 **Standard**（约 25MB，推荐）迁移应用、AI 凭据、代理服务及配置；选择 **Complete**（约 650MB+）可额外包含 AI 对话历史、会话和插件；
+   - 打包完成后在主目录生成 `~/omamigrate-backup.tar.gz`。
 2. **📡 步骤二：隔空快传 (Beam via LocalSend)**
    - 点击界面第 2 个按钮直接拉起 LocalSend，将压缩包无线投送到新电脑的 `~/Downloads` 目录。
 3. **⚡ 步骤三：在新电脑一键还原 (Restore)**
@@ -136,7 +136,7 @@ omarchy restart shell
 若新电脑是刚安装的纯净 Omarchy 系统，尚未安装 OmaMigrate 插件，也无需担心！压缩包内自带了**自包含的原生还原引擎**，开箱即可裸执行：
 
 ```bash
-mkdir -p ~/omarchy-restore && tar -xzf ~/Downloads/omarchy-migration.tar.gz -C ~/omarchy-restore
+mkdir -p ~/omarchy-restore && tar -xzf ~/Downloads/omamigrate-backup.tar.gz -C ~/omarchy-restore
 cd ~/omarchy-restore && ./restore.sh
 ```
 *还原脚本会自动补齐缺失软件、恢复密钥凭据、重配网络服务并自适应配置路径。*

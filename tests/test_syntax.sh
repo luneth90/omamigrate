@@ -27,13 +27,13 @@ for download_name in "Downloads" "Téléchargements" "ダウンロード" "下�
   mkdir -p "${TEST_HOME}/${download_name}/LocalSend"
   printf 'XDG_DOWNLOAD_DIR="$HOME/%s"\n' "${download_name}" > "${TEST_HOME}/.config/user-dirs.dirs"
   touch "${TEST_HOME}/${download_name}/LocalSend/omarchy-migration with spaces.tar.gz"
-  touch "${TEST_HOME}/${download_name}/omamigrate \"quoted\".tar.gz"
+  touch "${TEST_HOME}/${download_name}/omamigrate-backup \"quoted\".tar.gz"
   touch "${TEST_HOME}/${download_name}/unrelated-source.tar.gz"
   scan_output="$(HOME="${TEST_HOME}" XDG_CONFIG_HOME="${TEST_HOME}/.config" "${ROOT_DIR}/lib/scan-archives.sh")"
   jq -e '
     length == 2 and
     any(.[]; .name == "omarchy-migration with spaces.tar.gz") and
-    any(.[]; .name == "omamigrate \"quoted\".tar.gz") and
+    any(.[]; .name == "omamigrate-backup \"quoted\".tar.gz") and
     all(.[]; .name != "unrelated-source.tar.gz") and
     all(.[]; .name != "not-in-downloads.tgz")
   ' <<< "${scan_output}" >/dev/null
@@ -46,6 +46,8 @@ if grep -q 'onStreamFinished: function' "${ROOT_DIR}/OmaMigrate.qml"; then
 fi
 
 echo "==> Testing CLI help..."
-"${ROOT_DIR}/bin/omamigrate" --help >/dev/null
+cli_help="$("${ROOT_DIR}/bin/omamigrate" --help)"
+[[ "${cli_help}" == *'Create a portable migration backup'* ]]
+[[ "${cli_help}" == *'omamigrate-backup.tar.gz'* ]]
 
 echo "==> All tests passed successfully!"

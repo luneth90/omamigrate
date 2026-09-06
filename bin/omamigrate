@@ -20,9 +20,9 @@ Usage:
   omamigrate <command> [arguments]
 
 Commands:
-  export [output] [--with-history]  Export apps, configs, and credentials into archive (~25MB)
+  export [output] [--with-history]  Create a portable migration backup (~25MB)
                                     Add --with-history to include full AI chat logs & plugins (~650MB)
-  restore <archive_file>            Restore from an exported migration archive
+  restore <archive_file>            Restore from a portable migration backup
   send [archive_file]               Broadcast the archive over local network using LocalSend
   status                            Check migration readiness and list inventory summary
   version                           Show current version
@@ -32,14 +32,14 @@ Examples:
   omamigrate export
   omamigrate export --with-history
   omamigrate export ~/my-backup.tar.gz
-  omamigrate send ~/omarchy-migration.tar.gz
-  omamigrate restore ~/Downloads/omarchy-migration.tar.gz
+  omamigrate send ~/omamigrate-backup.tar.gz
+  omamigrate restore ~/Downloads/omamigrate-backup.tar.gz
 
 HELP_TXT
 }
 
 cmd_export() {
-  local target="$HOME/omarchy-migration.tar.gz"
+  local target="$HOME/omamigrate-backup.tar.gz"
   local full_ai="${OMAMIGRATE_FULL_AI:-0}"
 
   for arg in "$@"; do
@@ -110,7 +110,10 @@ cmd_restore() {
 }
 
 cmd_send() {
-  local archive="${1:-$HOME/omarchy-migration.tar.gz}"
+  local archive="${1:-$HOME/omamigrate-backup.tar.gz}"
+  if [ "$#" -eq 0 ] && [ ! -f "$archive" ] && [ -f "$HOME/omarchy-migration.tar.gz" ]; then
+    archive="$HOME/omarchy-migration.tar.gz"
+  fi
   if [ ! -f "$archive" ]; then
     msg_error "Archive file not found: ${archive}"
     exit 1
