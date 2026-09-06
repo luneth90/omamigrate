@@ -7,6 +7,7 @@
 [![CI](https://github.com/luneth90/omamigrate/actions/workflows/ci.yml/badge.svg)](https://github.com/luneth90/omamigrate/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/luneth90/omamigrate/actions/workflows/codeql.yml/badge.svg)](https://github.com/luneth90/omamigrate/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/luneth90/omamigrate/badge)](https://scorecard.dev/viewer/?uri=github.com/luneth90/omamigrate)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14463/badge)](https://www.bestpractices.dev/projects/14463)
 [![GitHub Release](https://img.shields.io/github/v/release/luneth90/omamigrate?sort=semver&logo=github)](https://github.com/luneth90/omamigrate/releases)
 [![Platform](https://img.shields.io/badge/Platform-Omarchy%20%7C%20Arch%20Linux-blue?logo=archlinux)](https://omarchy.org/)
 [![Architecture](https://img.shields.io/badge/Arch-x86__64%20%7C%20aarch64-orange)](#跨硬件架构智能兼容)
