@@ -121,7 +121,7 @@ Item {
       "bash", "-c",
       "PASS=\"$0\"\n" +
       "if [ -n \"$PASS\" ]; then echo \"$PASS\" | sudo -S -p \"\" -v 2>/dev/null || true; fi\n" +
-      "OMAMIGRATE_FULL_AI=" + (root.includeAiHistory ? "1" : "0") + " OMAMIGRATE_SUDO_PASS=\"$PASS\" \"" + root.cliPath + "\" export\n",
+      "OMAMIGRATE_FULL_AI=" + (root.includeAiHistory ? "1" : "0") + " OMAMIGRATE_SUDO_PASS=\"$PASS\" \"" + root.cliPath + "\" backup\n",
       pass
     ]
     exportProcess.running = true

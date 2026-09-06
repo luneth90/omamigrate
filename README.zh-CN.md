@@ -147,10 +147,10 @@ cd ~/omarchy-restore && ./restore.sh
 
 ```bash
 # 默认轻量打包（仅配置与凭证，~25MB，秒传首选）
-omamigrate export [自定义输出路径.tar.gz]
+omamigrate backup [自定义输出路径.tar.gz]
 
 # 包含全量 AI 聊天历史与插件 (~650MB+)
-omamigrate export --with-history [自定义输出路径.tar.gz]
+omamigrate backup --with-ai-history [自定义输出路径.tar.gz]
 
 # 调起 LocalSend 发送
 omamigrate send [待发送压缩包路径]
@@ -158,6 +158,8 @@ omamigrate send [待发送压缩包路径]
 # 一键还原
 omamigrate restore <归档包路径.tar.gz>
 ```
+
+运行 `omamigrate --help` 可查看完整英文命令说明，或使用 `omamigrate <command> --help` 查看子命令选项。旧的 `export` 命令仍作为 `backup` 的兼容别名保留。
 
 > **💡 提示**：若希望在终端全局直接输入 `omamigrate` 命令，可建立软链接：`ln -s ~/.config/omarchy/plugins/luneth90.omamigrate/bin/omamigrate ~/.local/bin/omamigrate`。
 

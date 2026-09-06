@@ -49,5 +49,35 @@ echo "==> Testing CLI help..."
 cli_help="$("${ROOT_DIR}/bin/omamigrate" --help)"
 [[ "${cli_help}" == *'Create a portable migration backup'* ]]
 [[ "${cli_help}" == *'omamigrate-backup.tar.gz'* ]]
+[[ "${cli_help}" == *'omamigrate backup --with-ai-history'* ]]
+
+backup_help="$("${ROOT_DIR}/bin/omamigrate" backup --help)"
+[[ "${backup_help}" == *'--with-ai-history'* ]]
+[[ "${backup_help}" == *'--complete'* ]]
+[[ "$("${ROOT_DIR}/bin/omamigrate" help backup)" == "${backup_help}" ]]
+[[ "$("${ROOT_DIR}/bin/omamigrate" export --help)" == "${backup_help}" ]]
+
+restore_help="$("${ROOT_DIR}/bin/omamigrate" restore --help)"
+[[ "${restore_help}" == *'restore <backup_file>'* ]]
+[[ "$("${ROOT_DIR}/bin/omamigrate" help restore)" == "${restore_help}" ]]
+
+send_help="$("${ROOT_DIR}/bin/omamigrate" send --help)"
+[[ "${send_help}" == *'send [backup_file]'* ]]
+"${ROOT_DIR}/bin/omamigrate" status --help >/dev/null
+
+if rg -q '[\p{Han}]' "${ROOT_DIR}/bin/omamigrate"; then
+  echo "CLI help and messages must remain English-only" >&2
+  exit 1
+fi
+
+if "${ROOT_DIR}/bin/omamigrate" backup --unknown-option >/dev/null 2>&1; then
+  echo "Unknown backup options must fail" >&2
+  exit 1
+fi
+
+if "${ROOT_DIR}/bin/omamigrate" restore >/dev/null 2>&1; then
+  echo "Restore without a backup file must fail" >&2
+  exit 1
+fi
 
 echo "==> All tests passed successfully!"

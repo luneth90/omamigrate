@@ -159,17 +159,19 @@ OmaMigrate also ships with a fully featured CLI for headless or script-driven en
 
 ```bash
 # Standard migration backup (~25MB, recommended)
-omamigrate export [custom-output.tar.gz]
+omamigrate backup [custom-output.tar.gz]
 
 # Complete migration backup with AI histories & plugins (~650MB+)
-omamigrate export --with-history [custom-output.tar.gz]
+omamigrate backup --with-ai-history [custom-output.tar.gz]
 
-# Beam archive via LocalSend
-omamigrate send [archive-path.tar.gz]
+# Send a migration backup via LocalSend
+omamigrate send [backup-file.tar.gz]
 
-# Restore ecosystem from archive
-omamigrate restore <archive-path.tar.gz>
+# Restore from a migration backup
+omamigrate restore <backup-file.tar.gz>
 ```
+
+Run `omamigrate --help` for the complete command list, or `omamigrate <command> --help` for command-specific options. The legacy `export` command remains available as an alias for `backup`.
 
 > **💡 Note**: If you want to use the `omamigrate` command directly in your shell, symlink it to your PATH: `ln -s ~/.config/omarchy/plugins/luneth90.omamigrate/bin/omamigrate ~/.local/bin/omamigrate`.
 
