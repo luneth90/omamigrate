@@ -25,6 +25,19 @@ Item {
   property string statusText: "Ready"
   property bool archiveDetected: false
   property bool includeAiHistory: false
+  property bool lockWarningActive: false
+
+  Timer {
+    id: lockWarningTimer
+    interval: 2000
+    repeat: false
+    onTriggered: root.lockWarningActive = false
+  }
+
+  function notifyLocked() {
+    root.lockWarningActive = true
+    lockWarningTimer.restart()
+  }
 
   // In-interface password prompt state
   property bool showPasswordPrompt: false
@@ -42,6 +55,10 @@ Item {
   }
 
   function close() {
+    if (root.isProcessing) {
+      root.notifyLocked()
+      return
+    }
     root.opened = false
     root.showPasswordPrompt = false
     root.inputPassword = ""
@@ -49,6 +66,10 @@ Item {
   }
 
   function dismiss() {
+    if (root.isProcessing) {
+      root.notifyLocked()
+      return
+    }
     root.opened = false
     root.showPasswordPrompt = false
     root.inputPassword = ""
@@ -128,7 +149,44 @@ Item {
 
       MouseArea {
         anchors.fill: parent
-        onClicked: root.dismiss()
+        onClicked: {
+          if (root.isProcessing) {
+            root.notifyLocked()
+          } else {
+            root.dismiss()
+          }
+        }
+      }
+    }
+
+    // Lock Warning Toast
+    Rectangle {
+      visible: root.lockWarningActive
+      anchors.horizontalCenter: card.horizontalCenter
+      anchors.bottom: card.top
+      anchors.bottomMargin: 12
+      height: 32
+      width: lockWarningRow.implicitWidth + 24
+      radius: 8
+      color: "#181825"
+      border.color: "#f38ba8"
+      border.width: 1
+      z: 10
+
+      RowLayout {
+        id: lockWarningRow
+        anchors.centerIn: parent
+        spacing: 8
+        Text {
+          text: "🔒"
+          font.pixelSize: 12
+        }
+        Text {
+          text: "Task in progress: window is locked to ensure system safety"
+          font.pixelSize: 11
+          font.bold: true
+          color: "#f38ba8"
+        }
       }
     }
 
@@ -139,8 +197,8 @@ Item {
       height: 360
       radius: 14
       color: "#1e1e2e"
-      border.color: "#313244"
-      border.width: 1
+      border.color: root.lockWarningActive ? "#f38ba8" : (root.isProcessing ? (root.currentMode === "export" ? "#89b4fa" : "#cba6f7") : "#313244")
+      border.width: root.lockWarningActive ? 2 : 1
       anchors.centerIn: parent
 
       MouseArea {
@@ -155,6 +213,11 @@ Item {
         Keys.priority: Keys.BeforeItem
         Keys.onPressed: function(event) {
           if (event.key === Qt.Key_Escape) {
+            if (root.isProcessing) {
+              root.notifyLocked()
+              event.accepted = true
+              return
+            }
             if (root.showPasswordPrompt) {
               root.showPasswordPrompt = false
               root.isProcessing = false
@@ -189,21 +252,27 @@ Item {
             width: 26
             height: 26
             radius: 13
-            color: closeMouse.containsMouse ? "#313244" : "transparent"
+            color: root.isProcessing ? "transparent" : (closeMouse.containsMouse ? "#313244" : "transparent")
 
             Text {
               anchors.centerIn: parent
-              text: "✕"
-              font.pixelSize: 13
-              color: closeMouse.containsMouse ? "#cdd6f4" : "#6c7086"
+              text: root.isProcessing ? "🔒" : "✕"
+              font.pixelSize: root.isProcessing ? 12 : 13
+              color: root.isProcessing ? "#6c7086" : (closeMouse.containsMouse ? "#cdd6f4" : "#6c7086")
             }
 
             MouseArea {
               id: closeMouse
               anchors.fill: parent
-              hoverEnabled: true
-              cursorShape: Qt.PointingHandCursor
-              onClicked: root.dismiss()
+              hoverEnabled: !root.isProcessing
+              cursorShape: root.isProcessing ? Qt.ForbiddenCursor : Qt.PointingHandCursor
+              onClicked: {
+                if (root.isProcessing) {
+                  root.notifyLocked()
+                } else {
+                  root.dismiss()
+                }
+              }
             }
           }
         }
@@ -217,6 +286,7 @@ Item {
           color: "#181825"
           border.color: "#313244"
           border.width: 1
+          opacity: root.isProcessing ? 0.45 : 1.0
 
           RowLayout {
             anchors.fill: parent
@@ -240,10 +310,13 @@ Item {
 
               MouseArea {
                 anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
+                hoverEnabled: !root.isProcessing
+                cursorShape: root.isProcessing ? Qt.ForbiddenCursor : Qt.PointingHandCursor
                 onClicked: {
-                  if (root.isProcessing) return
+                  if (root.isProcessing) {
+                    root.notifyLocked()
+                    return
+                  }
                   root.currentMode = "export"
                   root.checkArchive()
                 }
@@ -267,10 +340,13 @@ Item {
 
               MouseArea {
                 anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
+                hoverEnabled: !root.isProcessing
+                cursorShape: root.isProcessing ? Qt.ForbiddenCursor : Qt.PointingHandCursor
                 onClicked: {
-                  if (root.isProcessing) return
+                  if (root.isProcessing) {
+                    root.notifyLocked()
+                    return
+                  }
                   root.currentMode = "restore"
                   root.checkArchive()
                 }
@@ -510,11 +586,20 @@ Item {
                   Layout.fillWidth: true
                   spacing: 1
 
-                  Text {
-                    text: "Packaging in progress..."
-                    font.pixelSize: 13
-                    font.bold: true
-                    color: "#89b4fa"
+                  RowLayout {
+                    spacing: 6
+                    Text {
+                      text: "Packaging in progress..."
+                      font.pixelSize: 13
+                      font.bold: true
+                      color: "#89b4fa"
+                    }
+                    Text {
+                      text: "🔒 Locked"
+                      font.pixelSize: 10
+                      font.bold: true
+                      color: "#6c7086"
+                    }
                   }
 
                   Text {
@@ -913,11 +998,20 @@ Item {
                   Layout.fillWidth: true
                   spacing: 1
 
-                  Text {
-                    text: "Restoration in progress..."
-                    font.pixelSize: 13
-                    font.bold: true
-                    color: "#cba6f7"
+                  RowLayout {
+                    spacing: 6
+                    Text {
+                      text: "Restoration in progress..."
+                      font.pixelSize: 13
+                      font.bold: true
+                      color: "#cba6f7"
+                    }
+                    Text {
+                      text: "🔒 Locked"
+                      font.pixelSize: 10
+                      font.bold: true
+                      color: "#6c7086"
+                    }
                   }
 
                   Text {
