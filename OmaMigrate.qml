@@ -54,6 +54,7 @@ Item {
   property string authError: ""
   property bool authValidating: false
   property string pendingAction: "export" // "export" | "restore"
+  property string lastExportedArchive: ""
 
   readonly property string cliPath: String(Qt.resolvedUrl("bin/omamigrate")).replace("file://", "")
   readonly property string archiveScannerPath: String(Qt.resolvedUrl("lib/scan-archives.sh")).replace("file://", "")
@@ -107,11 +108,13 @@ Item {
     root.authError = ""
     root.statusText = "Ready"
     root.selectedArchive = ""
+    root.lastExportedArchive = ""
     root.scanArchives()
   }
 
   function startExport() {
     root.showPasswordPrompt = false
+    root.lastExportedArchive = ""
     root.isProcessing = true
     root.statusText = "Creating migration backup..."
     var pass = root.savedPassword || root.inputPassword
@@ -886,11 +889,14 @@ Item {
             }
 
             Text {
-              text: "✓ Migration Backup Created: ~/omamigrate-backup.tar.gz"
+              text: "✓ Migration Backup Created: " + (root.lastExportedArchive ? root.lastExportedArchive.replace(/\/home\/[^\/]+/, "~") : "")
               font.pixelSize: 13
               font.bold: true
               color: "#a6e3a1"
+              wrapMode: Text.WrapAnywhere
+              Layout.fillWidth: true
             }
+
 
             Text {
               text: "Transfer this backup directly to a nearby device over your local network. No cloud upload."
@@ -1704,6 +1710,10 @@ Item {
         var clean = String(line).replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "").trim()
         if (clean.length > 0) {
           root.statusText = clean
+          var match = clean.match(/Migration backup created successfully:\s*([^\s]+)/)
+          if (match && match[1]) {
+            root.lastExportedArchive = match[1]
+          }
         }
       }
     }
@@ -1719,7 +1729,12 @@ Item {
       root.isProcessing = false
       if (code === 0) {
         root.exportStep = 2
-        root.statusText = "Migration backup created: ~/omamigrate-backup.tar.gz"
+        if (root.lastExportedArchive) {
+          var displayPath = root.lastExportedArchive.replace(/\/home\/[^\/]+/, "~")
+          root.statusText = "Migration backup created: " + displayPath
+        } else {
+          root.statusText = "Migration backup created successfully."
+        }
         root.scanArchives()
       } else {
         root.exportStep = 4
@@ -1733,12 +1748,22 @@ Item {
 
   Process {
     id: sendProcess
-    command: ["bash", "-c", "\"" + root.cliPath + "\" send \"$HOME/omamigrate-backup.tar.gz\""]
+    command: [
+      "bash", "-c",
+      "ARCHIVE=\"$0\"\n" +
+      "if [ -n \"$ARCHIVE\" ] && [ -f \"$ARCHIVE\" ]; then\n" +
+      "  \"" + root.cliPath + "\" send \"$ARCHIVE\"\n" +
+      "else\n" +
+      "  \"" + root.cliPath + "\" send\n" +
+      "fi\n",
+      root.lastExportedArchive
+    ]
     onExited: function() {
       root.exportStep = 3
       root.statusText = "LocalSend opened. Select a nearby device for local transfer."
     }
   }
+
 
   Process {
     id: restoreProcess

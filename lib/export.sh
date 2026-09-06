@@ -261,6 +261,11 @@ chmod +x "${BACKUP_DIR}/restore.sh"
 msg_info "Creating final archive at ${OUTPUT_FILE}..."
 tar -czf "${OUTPUT_FILE}" -C "${BACKUP_DIR}" .
 
+# Record last backup location for automated tooling & GUI
+mkdir -p "${XDG_CACHE_HOME:-$HOME/.cache}/omamigrate"
+echo "${OUTPUT_FILE}" > "${XDG_CACHE_HOME:-$HOME/.cache}/omamigrate/last_backup" 2>/dev/null || true
+
 msg_ok "Migration backup created successfully: ${OUTPUT_FILE} ($(du -h "${OUTPUT_FILE}" | cut -f1))"
+
 
 
