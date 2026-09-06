@@ -71,6 +71,28 @@ class TestMigrationParsers(unittest.TestCase):
             except Exception as e:
                 self.fail(f"test_one_input raised unexpected exception {e} on input {data[:20]!r}")
 
+    def test_backup_filename_format(self):
+        import re
+        pattern = re.compile(r"^omamigrate-[a-zA-Z0-9_-]+-\d{8}-\d{6}\.tar\.gz$")
+        self.assertTrue(bool(pattern.match("omamigrate-archlinux-20260906-124500.tar.gz")))
+        self.assertTrue(bool(pattern.match("omamigrate-omarchy-20260906-000000.tar.gz")))
+        self.assertFalse(bool(pattern.match("omamigrate-backup.tar.gz")))
+
+    def test_localsend_duplicate_archive_matching(self):
+        import re
+        pattern = re.compile(r"(?i).*migrat.*(\.tar\.gz|\.tgz|\.tar\s*\(\d+\)\.gz|\s*\(\d+\)\.tar\.gz)")
+        candidates = [
+            "omamigrate-omarchy-20260906-123456.tar.gz",
+            "omamigrate-backup.tar.gz",
+            "omamigrate-backup (2).tar.gz",
+            "omamigrate-backup.tar (2).gz",
+            "omarchy-migration.tgz",
+            "omarchy-migration (1).tar.gz",
+        ]
+        for c in candidates:
+            self.assertTrue(bool(pattern.match(c)), f"Candidate {c} should match")
+
+
 
 if __name__ == "__main__":
     unittest.main()

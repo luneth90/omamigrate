@@ -54,7 +54,7 @@ Options:
   --with-ai-history  Include AI histories, sessions, and plugins; equivalent to --complete
   -h, --help         Show this help message
 
-The default output is ~/omamigrate-backup.tar.gz.
+The default output is ~/omamigrate-<hostname>-<YYYYMMDD-HHMMSS>.tar.gz.
 
 Compatibility alias:
   omamigrate export
@@ -98,8 +98,7 @@ Arguments:
 Options:
   -h, --help   Show this help message
 
-The default file is ~/omamigrate-backup.tar.gz. If it does not exist, the legacy
-~/omarchy-migration.tar.gz file is used when available.
+When omitted, the newest migration backup in ~ or ~/Downloads is automatically selected.
 HELP_TXT
 }
 
@@ -132,7 +131,11 @@ show_command_help() {
 }
 
 cmd_backup() {
-  local target="$HOME/omamigrate-backup.tar.gz"
+  local host_slug="$(hostname -s 2>/dev/null || echo "omarchy")"
+  host_slug="$(echo "${host_slug}" | tr -cd '[:alnum:]_-')"
+  [ -z "${host_slug}" ] && host_slug="omarchy"
+  local timestamp="$(date +%Y%m%d-%H%M%S)"
+  local target="$HOME/omamigrate-${host_slug}-${timestamp}.tar.gz"
   local full_ai="${OMAMIGRATE_FULL_AI:-0}"
   local target_set=0
 
@@ -255,14 +258,26 @@ cmd_send() {
     echo "Run 'omamigrate send --help' for usage." >&2
     return 2
   fi
-  local archive="${1:-$HOME/omamigrate-backup.tar.gz}"
-  if [ "$#" -eq 0 ] && [ ! -f "$archive" ] && [ -f "$HOME/omarchy-migration.tar.gz" ]; then
-    archive="$HOME/omarchy-migration.tar.gz"
+  local archive="${1:-}"
+  if [ -z "$archive" ]; then
+    local download_dir=""
+    if command -v xdg-user-dir >/dev/null 2>&1; then
+      download_dir="$(xdg-user-dir DOWNLOAD 2>/dev/null || true)"
+    fi
+    [ -z "$download_dir" ] && download_dir="$HOME/Downloads"
+    local search_dirs=("$HOME")
+    [ -d "$download_dir" ] && search_dirs+=("$download_dir")
+
+    archive="$(find "${search_dirs[@]}" -maxdepth 2 -type f \( \
+      -iname 'omamigrate-*.tar.gz' -o -iname 'omamigrate-*.tgz' -o -iname 'omamigrate-*.tar*.gz' \
+      -o -iname '*migrate*.tar.gz' -o -iname '*migration*.tar.gz' \
+    \) -printf '%T@\t%p\0' 2>/dev/null | sort -z -r -n -k1,1 | cut -z -f2- | head -z -n 1 | tr -d '\0' || true)"
   fi
-  if [ ! -f "$archive" ]; then
-    msg_error "Migration backup not found: ${archive}"
+  if [ -z "$archive" ] || [ ! -f "$archive" ]; then
+    msg_error "No migration backup found to send. Run 'omamigrate backup' first."
     exit 1
   fi
+
 
   if command -v localsend >/dev/null 2>&1; then
     msg_info "Opening LocalSend for direct local transfer: ${archive}"

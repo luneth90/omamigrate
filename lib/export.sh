@@ -7,7 +7,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/core.sh"
 
-OUTPUT_FILE="${1:-$HOME/omamigrate-backup.tar.gz}"
+if [ -n "${1:-}" ]; then
+  OUTPUT_FILE="$1"
+else
+  HOST_SLUG="$(hostname -s 2>/dev/null || echo "omarchy")"
+  HOST_SLUG="$(echo "${HOST_SLUG}" | tr -cd '[:alnum:]_-')"
+  [ -z "${HOST_SLUG}" ] && HOST_SLUG="omarchy"
+  TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
+  OUTPUT_FILE="$HOME/omamigrate-${HOST_SLUG}-${TIMESTAMP}.tar.gz"
+fi
 
 STAGING_BASE="${XDG_CACHE_HOME:-$HOME/.cache}/omamigrate"
 mkdir -p "$STAGING_BASE"
@@ -254,3 +262,5 @@ msg_info "Creating final archive at ${OUTPUT_FILE}..."
 tar -czf "${OUTPUT_FILE}" -C "${BACKUP_DIR}" .
 
 msg_ok "Migration backup created successfully: ${OUTPUT_FILE} ($(du -h "${OUTPUT_FILE}" | cut -f1))"
+
+

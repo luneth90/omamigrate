@@ -39,16 +39,30 @@ json_escape() {
   printf '%s' "${value}"
 }
 
+declare -A seen=()
 archives=()
 while IFS= read -r -d '' archive; do
-  archives+=("${archive}")
+  [ -z "${archive}" ] && continue
+  real_path="$(realpath "${archive}" 2>/dev/null || printf '%s' "${archive}")"
+  if [ -z "${seen["${real_path}"]:-}" ]; then
+    seen["${real_path}"]=1
+    archives+=("${archive}")
+  fi
 done < <(
-  if [ -d "${download_dir}" ]; then
-    find "${download_dir}" -maxdepth 2 -type f \
-      \( -iname '*migration*.tar.gz' -o -iname '*migration*.tgz' \
-         -o -iname '*migrate*.tar.gz' -o -iname '*migrate*.tgz' \) \
-      -print0 2>/dev/null
-  fi | sort -zu
+  {
+    if [ -d "${download_dir}" ]; then
+      find "${download_dir}" -maxdepth 2 -type f \
+        \( -iname '*migration*.tar.gz' -o -iname '*migration*.tgz' -o -iname '*migration*.tar*.gz' \
+           -o -iname '*migrate*.tar.gz' -o -iname '*migrate*.tgz' -o -iname '*migrate*.tar*.gz' \) \
+        -printf '%T@\t%p\0' 2>/dev/null
+    fi
+    if [ -d "${HOME}" ]; then
+      find "${HOME}" -maxdepth 1 -type f \
+        \( -iname '*migration*.tar.gz' -o -iname '*migration*.tgz' -o -iname '*migration*.tar*.gz' \
+           -o -iname '*migrate*.tar.gz' -o -iname '*migrate*.tgz' -o -iname '*migrate*.tar*.gz' \) \
+        -printf '%T@\t%p\0' 2>/dev/null
+    fi
+  } | sort -z -r -n -k1,1 | cut -z -f2-
 )
 
 printf '['
