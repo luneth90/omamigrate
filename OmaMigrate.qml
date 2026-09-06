@@ -597,6 +597,38 @@ Item {
 
             Item { height: 2 }
 
+            // Target device reminder badge
+            Rectangle {
+              Layout.fillWidth: true
+              height: 38
+              radius: 6
+              color: "#2a221d"
+              border.color: "#4f3b2a"
+              border.width: 1
+
+              RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 10
+                anchors.rightMargin: 10
+                spacing: 8
+
+                Text {
+                  text: "💡"
+                  font.pixelSize: 13
+                }
+
+                Text {
+                  Layout.fillWidth: true
+                  text: "Please open LocalSend on your target machine first so it can be discovered."
+                  font.pixelSize: 11
+                  color: "#fab387"
+                  wrapMode: Text.WordWrap
+                }
+              }
+            }
+
+            Item { height: 2 }
+
             Rectangle {
               Layout.fillWidth: true
               height: 40
@@ -619,6 +651,7 @@ Item {
                 onClicked: {
                   root.statusText = "Launching LocalSend..."
                   sendProcess.running = true
+                  root.dismiss()
                 }
               }
             }
@@ -871,18 +904,18 @@ Item {
                 Layout.fillWidth: true
                 height: 38
                 radius: 8
-                color: reloadMouse.pressed ? "#74c7ec" : reloadMouse.containsMouse ? "#b4befe" : "#89b4fa"
+                color: doneRestoreMouse.pressed ? "#74c7ec" : doneRestoreMouse.containsMouse ? "#b4befe" : "#89b4fa"
 
                 Text {
                   anchors.centerIn: parent
-                  text: "🔄 Reload Desktop"
+                  text: "Done"
                   font.pixelSize: 13
                   font.bold: true
                   color: "#11111b"
                 }
 
                 MouseArea {
-                  id: reloadMouse
+                  id: doneRestoreMouse
                   anchors.fill: parent
                   hoverEnabled: true
                   cursorShape: Qt.PointingHandCursor
@@ -890,27 +923,6 @@ Item {
                     reloadProcess.running = true
                     root.dismiss()
                   }
-                }
-              }
-
-              Rectangle {
-                width: 90
-                height: 38
-                radius: 8
-                color: "#313244"
-
-                Text {
-                  anchors.centerIn: parent
-                  text: "Close"
-                  font.pixelSize: 12
-                  color: "#cdd6f4"
-                }
-
-                MouseArea {
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: root.dismiss()
                 }
               }
             }
@@ -1042,7 +1054,7 @@ Item {
     id: restoreProcess
     command: [
       "bash", "-c",
-      "ARCHIVE=\"$([ -f $HOME/Downloads/omarchy-migration.tar.gz ] && echo $HOME/Downloads/omarchy-migration.tar.gz || echo $HOME/omarchy-migration.tar.gz)\"; \"" + root.cliPath + "\" restore \"$ARCHIVE\""
+      "ARCHIVE=\"$([ -f $HOME/Downloads/omarchy-migration.tar.gz ] && echo $HOME/Downloads/omarchy-migration.tar.gz || echo $HOME/omarchy-migration.tar.gz)\"; OMAMIGRATE_GUI=1 \"" + root.cliPath + "\" restore \"$ARCHIVE\""
     ]
     stdout: SplitParser {
       onRead: function(line) {

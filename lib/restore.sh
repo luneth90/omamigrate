@@ -4,6 +4,13 @@
 # ==============================================================================
 set -u
 
+# Logging helpers (compatible with CLI & GUI stream parser)
+msg_info()  { echo -e "\033[0;36m==>\033[0m \033[1m$*\033[0m"; }
+msg_step()  { echo -e "  \033[0;34m->\033[0m $*"; }
+msg_ok()    { echo -e "  \033[0;32m✓\033[0m $*"; }
+msg_warn()  { echo -e "  \033[0;33m!\033[0m \033[0;33m$*\033[0m"; }
+msg_error() { echo -e "  \033[0;31m✗\033[0m \033[0;31m$*\033[0m" >&2; }
+
 # 1. Guard against root execution
 if [ "$(id -u)" -eq 0 ]; then
   echo ""
@@ -17,6 +24,7 @@ if [ "$(id -u)" -eq 0 ]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RESTORE_DATA_DIR="${1:-$SCRIPT_DIR}"
 CURRENT_USER="$(id -un)"
 CURRENT_HOME="$HOME"
 
@@ -29,30 +37,38 @@ else
   ELEVATOR="sudo"
 fi
 
-echo "=========================================================="
-echo " OmaMigrate: Restoring Omarchy Ecosystem..."
-echo " Target User: ${CURRENT_USER} (Home: ${CURRENT_HOME})"
-echo "=========================================================="
+msg_info "Starting OmaMigrate Ecosystem Restoration..."
+msg_step "Target User: ${CURRENT_USER} (${CURRENT_HOME})"
 
 # 2. Automatically clear pacman database locks from interrupted operations
 if [ -f /var/lib/pacman/db.lck ]; then
-  echo "==> [Clean] Detected lingering pacman lock file, clearing..."
+  msg_step "Clearing lingering pacman lock file..."
   $ELEVATOR rm -f /var/lib/pacman/db.lck || true
 fi
 
 # 3. Restore user configuration files
-echo "==> 1. Restoring user configs and dotfiles..."
+msg_info "Restoring user configs and dotfiles..."
 mkdir -p "${CURRENT_HOME}/.config" "${CURRENT_HOME}/.local/bin"
 
-if [ -d "${SCRIPT_DIR}/user_home" ]; then
+if [ -d "${RESTORE_DATA_DIR}/user_home" ]; then
   chmod -R u+w "${CURRENT_HOME}" 2>/dev/null || true
-  cp -rfp "${SCRIPT_DIR}/user_home/." "${CURRENT_HOME}/"
+  if [ -d "${RESTORE_DATA_DIR}/user_home/.config" ]; then
+    for cfg in "${RESTORE_DATA_DIR}/user_home/.config"/*; do
+      [ -e "$cfg" ] && msg_step "Restoring config: ~/.config/$(basename "$cfg")"
+    done
+  fi
+  for cred in .ssh .gnupg .password-store .claude .codex .gemini .grok .thunderbird .proxychains; do
+    [ -d "${RESTORE_DATA_DIR}/user_home/$cred" ] && msg_step "Restoring credential store: ~/$cred"
+  done
+  cp -rfp "${RESTORE_DATA_DIR}/user_home/." "${CURRENT_HOME}/"
+  msg_ok "User configs and dotfiles extracted."
 fi
 
 # 4. Smart Path Adaptation (replaces old machine username with current username)
-OLD_HOME="$(cat "${SCRIPT_DIR}/pkg_meta/source_home.txt" 2>/dev/null || true)"
+OLD_HOME="$(cat "${RESTORE_DATA_DIR}/pkg_meta/source_home.txt" 2>/dev/null || true)"
 if [ -n "${OLD_HOME}" ] && [ "${CURRENT_HOME}" != "${OLD_HOME}" ]; then
-  echo "==> 2. Adapting username paths (${OLD_HOME} -> ${CURRENT_HOME})..."
+  msg_info "Adapting username paths (${OLD_HOME} -> ${CURRENT_HOME})..."
+  msg_step "Translating AI and CLI agent configs..."
   [ -f "${CURRENT_HOME}/.codex/config.toml" ] && sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" "${CURRENT_HOME}/.codex/config.toml"
   [ -f "${CURRENT_HOME}/.claude.json" ] && sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" "${CURRENT_HOME}/.claude.json"
   [ -f "${CURRENT_HOME}/.gemini/antigravity-cli/settings.json" ] && sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" "${CURRENT_HOME}/.gemini/antigravity-cli/settings.json"
@@ -60,17 +76,19 @@ if [ -n "${OLD_HOME}" ] && [ "${CURRENT_HOME}" != "${OLD_HOME}" ]; then
   [ -f "${CURRENT_HOME}/.ssh/config" ] && sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" "${CURRENT_HOME}/.ssh/config"
   [ -d "${CURRENT_HOME}/.thunderbird" ] && find "${CURRENT_HOME}/.thunderbird" -type f -name "*.ini" -exec sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" {} + 2>/dev/null || true
 
-  # Adapt proxy configuration paths
+  msg_step "Translating proxy client paths..."
   for pdir in clash clash-verge clash-verge-rev clash-nyanpasu mihomo mihomo-party nekoray Matsuri flclash v2raya; do
     if [ -d "${CURRENT_HOME}/.config/${pdir}" ]; then
       find "${CURRENT_HOME}/.config/${pdir}" -type f \( -name "*.yaml" -o -name "*.yml" -o -name "*.json" -o -name "*.toml" \) \
         -exec sed -i "s|${OLD_HOME}|${CURRENT_HOME}|g" {} + 2>/dev/null || true
     fi
   done
+  msg_ok "Username paths adapted successfully."
 fi
 
 # 5. Fix permissions for security and credentials
-echo "==> 3. Setting secure permissions for credentials..."
+msg_info "Configuring secure permissions for credentials..."
+msg_step "Securing ~/.ssh, ~/.gnupg, ~/.password-store..."
 chmod -R u+rwX \
   "${CURRENT_HOME}/.config" \
   "${CURRENT_HOME}/.local" \
@@ -106,29 +124,30 @@ if [ -d "${CURRENT_HOME}/.local/share/keyrings" ]; then
     fi
   done
   if [ "$HAS_ENCRYPTED_KEYRING" = true ]; then
-    echo "    [Keyring] Detected password-protected desktop keyring:"
-    echo "      * If your new computer uses the same login password as the old computer, PAM will unlock it automatically."
-    echo "      * If you set a different login password on this new computer, enter the OLD computer's password when prompted on first launch."
+    msg_step "Password-protected desktop keyring restored."
   else
-    echo "    [Keyring] Desktop keyring restored (blank/auto-unlock mode)."
+    msg_step "Desktop keyring restored (blank/auto-unlock mode)."
   fi
 fi
+msg_ok "Credentials and keyrings secured."
 
 # 6. Restore system-level configs (sing-box, mihomo, v2raya, xray, v2ray, daed, proxychains)
-if [ -d "${SCRIPT_DIR}/system_root" ]; then
-  echo "==> 4. Restoring system-level configurations..."
-  $ELEVATOR cp -rfp "${SCRIPT_DIR}/system_root/." / 2>/dev/null || true
+if [ -d "${RESTORE_DATA_DIR}/system_root" ]; then
+  msg_info "Restoring system-level proxy configurations..."
+  msg_step "Deploying /etc system configs..."
+  $ELEVATOR cp -rfp "${RESTORE_DATA_DIR}/system_root/." / 2>/dev/null || true
   if getent group sing-box >/dev/null 2>&1; then
     $ELEVATOR chown -R root:sing-box "/etc/sing-box" 2>/dev/null || true
     $ELEVATOR usermod -aG sing-box "$CURRENT_USER" 2>/dev/null || true
     [ -f "/etc/sing-box/config.json" ] && $ELEVATOR chmod 640 "/etc/sing-box/config.json" 2>/dev/null || true
   fi
   [ -f "/usr/local/bin/sing-box-node-rotate" ] && $ELEVATOR chmod 755 /usr/local/bin/sing-box-node-rotate 2>/dev/null || true
+  msg_ok "System-level configurations restored."
 fi
 
 # 7. Incremental package installation (arch-native & yay/AUR)
-echo "==> 5. Detecting and installing missing packages..."
-PKG_FILE="${SCRIPT_DIR}/pkg_meta/packages_explicit.txt"
+msg_info "Detecting and installing missing software packages..."
+PKG_FILE="${RESTORE_DATA_DIR}/pkg_meta/packages_explicit.txt"
 
 if [ -f "$PKG_FILE" ]; then
   MISSING_PKGS=()
@@ -140,25 +159,27 @@ if [ -f "$PKG_FILE" ]; then
   done < "$PKG_FILE"
 
   if [ ${#MISSING_PKGS[@]} -gt 0 ]; then
-    echo "    Found ${#MISSING_PKGS[@]} missing packages: ${MISSING_PKGS[*]}"
-    echo "    Installing packages..."
+    msg_step "Found ${#MISSING_PKGS[@]} missing packages to install..."
     if command -v yay >/dev/null 2>&1; then
+      msg_step "Installing missing packages with yay..."
       yay -S --needed --noconfirm "${MISSING_PKGS[@]}" || {
-        echo "    [Notice] Some packages failed due to network timeout. You can re-run ./restore.sh anytime to retry."
+        msg_warn "Some packages timed out. You can retry later."
       }
     elif command -v omarchy >/dev/null 2>&1; then
+      msg_step "Installing missing packages with omarchy pkg..."
       omarchy pkg add "${MISSING_PKGS[@]}" || sudo pacman -S --needed --noconfirm "${MISSING_PKGS[@]}" || true
     else
+      msg_step "Installing missing packages with pacman..."
       sudo pacman -S --needed --noconfirm "${MISSING_PKGS[@]}" || true
     fi
   else
-    echo "    All required packages are already installed."
+    msg_ok "All required packages are already installed."
   fi
 fi
 
 # Ensure core dependencies
 CORE_DEPS=(pass fcitx5 fcitx5-chinese-addons fcitx5-configtool jq curl)
-if [ -d "${SCRIPT_DIR}/system_root/etc/sing-box" ]; then
+if [ -d "${RESTORE_DATA_DIR}/system_root/etc/sing-box" ]; then
   CORE_DEPS+=("sing-box")
 fi
 CORE_MISSING=()
@@ -168,96 +189,62 @@ for cpkg in "${CORE_DEPS[@]}"; do
   fi
 done
 if [ ${#CORE_MISSING[@]} -gt 0 ]; then
-  echo "    Installing core dependencies: ${CORE_MISSING[*]}"
+  msg_step "Installing missing core dependencies: ${CORE_MISSING[*]}"
   if command -v yay >/dev/null 2>&1; then
     yay -S --needed --noconfirm "${CORE_MISSING[@]}" || true
   else
     sudo pacman -S --needed --noconfirm "${CORE_MISSING[@]}" || true
   fi
 fi
+msg_ok "Package dependencies verified."
 
 # 8. Restore mise development toolchains
-echo "==> 6. Restoring mise CLI tools and language runtimes..."
 if command -v mise >/dev/null 2>&1; then
-  echo "    Running mise install..."
-  mise install -y || {
-    echo "    [Notice] Some mise tools timed out downloading. Run 'mise install' later to finish."
-  }
-else
-  echo "    mise not found; install with 'yay -S mise-bin' and run 'mise install' to restore CLI tools."
+  msg_info "Restoring mise development toolchains..."
+  msg_step "Running mise install..."
+  mise install -y || msg_warn "Some mise tools timed out."
+  msg_ok "Development toolchains restored."
 fi
 
 # 9. Activate and enable services & timers
-echo "==> 7. Activating background timers and services..."
+msg_info "Activating system background services and timers..."
 $ELEVATOR systemctl daemon-reload
 
-# sing-box
-if [ -d "${SCRIPT_DIR}/system_root/etc/sing-box" ] || [ -f "/etc/systemd/system/sing-box.service" ]; then
-  if command -v sing-box >/dev/null 2>&1; then
-    echo "    Enabling sing-box service & node rotate timer..."
-    $ELEVATOR systemctl enable --now sing-box.service 2>/dev/null || true
-    if [ -f "/etc/systemd/system/sing-box-node-rotate.timer" ]; then
-      $ELEVATOR systemctl enable --now sing-box-node-rotate.timer 2>/dev/null || true
+for srv in sing-box mihomo v2raya xray v2ray daed; do
+  if [ -d "${RESTORE_DATA_DIR}/system_root/etc/$srv" ] || [ -f "/etc/systemd/system/${srv}.service" ]; then
+    if command -v "$srv" >/dev/null 2>&1; then
+      msg_step "Enabling $srv service..."
+      $ELEVATOR systemctl enable --now "${srv}.service" 2>/dev/null || true
     fi
   fi
-fi
+done
 
-# mihomo
-if [ -d "${SCRIPT_DIR}/system_root/etc/mihomo" ] || [ -f "/etc/systemd/system/mihomo.service" ]; then
-  if command -v mihomo >/dev/null 2>&1; then
-    echo "    Enabling mihomo service..."
-    $ELEVATOR systemctl enable --now mihomo.service 2>/dev/null || true
-  fi
-fi
-
-# v2raya
-if [ -d "${SCRIPT_DIR}/system_root/etc/v2raya" ] || [ -f "/etc/systemd/system/v2raya.service" ]; then
-  if command -v v2raya >/dev/null 2>&1; then
-    echo "    Enabling v2raya service..."
-    $ELEVATOR systemctl enable --now v2raya.service 2>/dev/null || true
-  fi
-fi
-
-# xray / v2ray
-if [ -d "${SCRIPT_DIR}/system_root/etc/xray" ] || [ -f "/etc/systemd/system/xray.service" ]; then
-  if command -v xray >/dev/null 2>&1; then
-    echo "    Enabling xray service..."
-    $ELEVATOR systemctl enable --now xray.service 2>/dev/null || true
-  fi
-fi
-if [ -d "${SCRIPT_DIR}/system_root/etc/v2ray" ] || [ -f "/etc/systemd/system/v2ray.service" ]; then
-  if command -v v2ray >/dev/null 2>&1; then
-    echo "    Enabling v2ray service..."
-    $ELEVATOR systemctl enable --now v2ray.service 2>/dev/null || true
-  fi
-fi
-
-# daed
-if [ -d "${SCRIPT_DIR}/system_root/etc/daed" ] || [ -f "/etc/systemd/system/daed.service" ]; then
-  if command -v daed >/dev/null 2>&1; then
-    echo "    Enabling daed service..."
-    $ELEVATOR systemctl enable --now daed.service 2>/dev/null || true
-  fi
+if [ -f "/etc/systemd/system/sing-box-node-rotate.timer" ]; then
+  msg_step "Enabling sing-box-node-rotate timer..."
+  $ELEVATOR systemctl enable --now sing-box-node-rotate.timer 2>/dev/null || true
 fi
 
 # user systemd timers
 systemctl --user daemon-reload
 if [ -f "${CURRENT_HOME}/.config/systemd/user/icloud-mail-triage.timer" ]; then
-  echo "    Enabling daily email triage timer (icloud-mail-triage.timer)..."
+  msg_step "Enabling daily email triage timer..."
   systemctl --user enable --now icloud-mail-triage.timer 2>/dev/null || true
 fi
+msg_ok "Background services and timers activated."
 
 # 10. Reload desktop environment
-echo "==> 8. Reloading Hyprland & Omarchy shell..."
+msg_info "Reloading desktop environment..."
 if command -v hyprctl >/dev/null 2>&1; then
+  msg_step "Reloading Hyprland configuration..."
   hyprctl reload 2>/dev/null || true
 fi
-if command -v omarchy >/dev/null 2>&1; then
-  omarchy restart shell 2>/dev/null || true
+
+# Only restart shell automatically when executed from standalone CLI, NOT from OmaMigrate GUI
+if [ -z "${OMAMIGRATE_GUI:-}" ]; then
+  if command -v omarchy >/dev/null 2>&1; then
+    msg_step "Restarting Omarchy shell..."
+    omarchy restart shell 2>/dev/null || true
+  fi
 fi
 
-echo ""
-echo "=========================================================="
-echo " OmaMigrate: Restoration completed successfully!"
-echo " Fully idempotent: re-run ./restore.sh anytime if needed."
-echo "=========================================================="
+msg_ok "Restoration completed successfully!"

@@ -51,13 +51,24 @@ cmd_restore() {
 
   local restore_dir
   restore_dir="$(mktemp -d -t omamigrate-restore-XXXXXX)"
-  msg_info "Extracting migration bundle from ${archive}..."
-  tar -xzf "$archive" -C "$restore_dir"
+  trap 'rm -rf "${restore_dir}"' EXIT
 
-  if [ -f "${restore_dir}/restore.sh" ]; then
+  msg_info "Extracting migration bundle from $(basename "$archive")..."
+  msg_step "Extracting staging contents..."
+  tar -xzf "$archive" -C "$restore_dir"
+  msg_ok "Migration bundle extracted."
+
+  local restore_engine=""
+  if [ -f "${LIB_DIR}/restore.sh" ]; then
+    restore_engine="${LIB_DIR}/restore.sh"
+  elif [ -f "${restore_dir}/restore.sh" ]; then
     chmod +x "${restore_dir}/restore.sh"
+    restore_engine="${restore_dir}/restore.sh"
+  fi
+
+  if [ -n "$restore_engine" ]; then
     msg_info "Executing restore engine..."
-    "${restore_dir}/restore.sh"
+    bash "$restore_engine" "$restore_dir"
   else
     msg_error "Invalid archive: restore.sh not found inside bundle."
     exit 1
@@ -73,7 +84,13 @@ cmd_send() {
 
   if command -v localsend >/dev/null 2>&1; then
     msg_info "Opening LocalSend to transfer ${archive}..."
-    localsend "$archive" >/dev/null 2>&1 &
+    if command -v systemd-run >/dev/null 2>&1; then
+      systemd-run --user --unit="localsend-$(date +%s%N)" localsend "$archive" >/dev/null 2>&1 || true
+    elif command -v uwsm-app >/dev/null 2>&1; then
+      uwsm-app -- localsend "$archive" >/dev/null 2>&1 || true
+    else
+      nohup setsid localsend "$archive" </dev/null >/dev/null 2>&1 &
+    fi
     msg_ok "LocalSend launched. Select your new device in the UI to beam the bundle!"
   else
     msg_warn "LocalSend is not installed. You can transfer using scp:"
