@@ -8,6 +8,7 @@ REAL_SCRIPT="$(readlink -f "${BASH_SOURCE[0]}")"
 BIN_DIR="$(cd "$(dirname "${REAL_SCRIPT}")" && pwd)"
 LIB_DIR="$(cd "${BIN_DIR}/../lib" && pwd)"
 source "${LIB_DIR}/core.sh"
+source "${LIB_DIR}/ai-state.sh"
 
 VERSION="1.0.0"
 
@@ -317,7 +318,16 @@ cmd_status() {
   msg_info "OmaMigrate System Inventory:"
   msg_step "Explicit Arch packages : $(pacman -Qqe | grep -vE "${HW_EXCLUDE_REGEX}" | wc -l) (filtered)"
   msg_step "Desktop configs       : $(find "$HOME/.config" -maxdepth 1 -type d | wc -l) items in ~/.config"
-  msg_step "AI CLI agents         : $(ls -d "$HOME"/.claude "$HOME"/.codex "$HOME"/.gemini "$HOME"/.grok 2>/dev/null | xargs -n1 basename | tr '\n' ' ')"
+  local ai_agents=()
+  [ -d "$HOME/.claude" ] && ai_agents+=("Claude")
+  [ -d "$HOME/.codex" ] && ai_agents+=("Codex")
+  [ -d "$HOME/.gemini/antigravity-cli" ] && ai_agents+=("Agy")
+  [ -d "$HOME/.pi" ] && ai_agents+=("Pi")
+  [ -d "$HOME/.grok" ] && ai_agents+=("Grok")
+  { [ -d "$HOME/.omp" ] || [ -d "${XDG_DATA_HOME:-$HOME/.local/share}/omp" ]; } && ai_agents+=("OMP")
+  { [ -d "${XDG_CONFIG_HOME:-$HOME/.config}/opencode" ] || \
+    [ -d "${XDG_DATA_HOME:-$HOME/.local/share}/opencode" ]; } && ai_agents+=("OpenCode")
+  msg_step "AI CLI agents         : ${ai_agents[*]:-None}"
   msg_step "Sing-box configured   : $([ -f /etc/sing-box/config.json ] && echo 'Yes (/etc/sing-box/config.json)' || echo 'No')"
   msg_step "Email triage timer    : $(systemctl --user is-enabled icloud-mail-triage.timer 2>/dev/null || echo 'Not configured')"
   msg_step "Node rotate timer     : $(systemctl is-enabled sing-box-node-rotate.timer 2>/dev/null || echo 'Not configured')"

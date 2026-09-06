@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 from tests.fuzz_migration import (
     DRIVER_BLACKLIST_RE,
     parse_archive_json,
@@ -32,6 +33,7 @@ class TestMigrationParsers(unittest.TestCase):
         self.assertIn("/home/newuser/.config/hypr/autostart.sh", result)
         self.assertIn("/home/newuser/pictures/avatar.png", result)
         self.assertNotIn("/home/olduser", result)
+        self.assertEqual(sanitize_username_path(result, "olduser", "newuser"), result)
 
     def test_archive_json_validation(self):
         valid_json = '[{"name": "omarchy-migration.tar.gz", "path": "/home/u/Downloads/omarchy-migration.tar.gz", "size": "15MB", "date": "2026-09-06"}]'
@@ -104,9 +106,10 @@ class TestMigrationParsers(unittest.TestCase):
 
     def test_temp_backup_file_filtering(self):
         import re
-        pattern = re.compile(r"^.*(\.bak|\.bak\..*|~|\.tmp)$")
+        pattern = re.compile(r"^.*(\.bak.*|~|\.tmp)$")
         self.assertTrue(pattern.match("config.json.bak"))
         self.assertTrue(pattern.match("config.json.bak.20260831-110110"))
+        self.assertTrue(pattern.match("config.json.bak-old"))
         self.assertTrue(pattern.match("config.json~"))
         self.assertTrue(pattern.match("config.json.tmp"))
         self.assertFalse(pattern.match("config.json"))
@@ -117,6 +120,88 @@ class TestMigrationParsers(unittest.TestCase):
         self.assertTrue(validate_singbox_config(valid))
         invalid = '{"inbounds": "not-a-list"}'
         self.assertFalse(validate_singbox_config(invalid))
+
+
+class TestRestoreContract(unittest.TestCase):
+    """Regression checks for critical restore convergence guarantees."""
+
+    @classmethod
+    def setUpClass(cls):
+        root = Path(__file__).resolve().parent.parent
+        cls.restore = (root / "lib" / "restore.sh").read_text()
+        cls.export = (root / "lib" / "export.sh").read_text()
+        cls.core = (root / "lib" / "core.sh").read_text()
+        cls.ai_state = (root / "lib" / "ai-state.sh").read_text()
+        cls.qml = (root / "OmaMigrate.qml").read_text()
+
+    def test_tun_is_loaded_and_persisted_before_service_activation(self):
+        module_file = "/etc/modules-load.d/99-omamigrate-sing-box-tun.conf"
+        self.assertIn("modprobe tun", self.restore)
+        self.assertIn(module_file, self.restore)
+        self.assertIn("[ ! -c /dev/net/tun ]", self.restore)
+        self.assertLess(self.restore.index("modprobe tun"), self.restore.index("pacman -Syu"))
+        self.assertLess(self.restore.index("modprobe tun"), self.restore.index("for srv in sing-box"))
+
+    def test_singbox_permissions_and_health_are_verified(self):
+        self.assertIn("$ELEVATOR find /etc/sing-box", self.restore)
+        self.assertIn('systemctl is-active --quiet "${srv}.service"', self.restore)
+        self.assertIn('record_restore_error "Could not restart ${srv}.service."', self.restore)
+
+    def test_timer_is_stopped_before_system_config_deployment(self):
+        stop = "systemctl stop sing-box-node-rotate.timer"
+        deploy = 'msg_step "Deploying /etc system configs..."'
+        self.assertLess(self.restore.index(stop), self.restore.index(deploy))
+
+    def test_package_restore_never_performs_partial_upgrade_sync(self):
+        self.assertNotIn("pacman -Sy --noconfirm", self.restore)
+        self.assertIn('NATIVE_PKGS+=("$pkg")', self.restore)
+        self.assertIn('AUR_PKGS+=("$pkg")', self.restore)
+
+    def test_restore_archive_is_not_modified_and_shell_profiles_are_exported(self):
+        self.assertNotIn('rm -rf "${RESTORE_DATA_DIR}/user_home', self.restore)
+        self.assertIn(".zshrc .zprofile", self.export)
+
+    def test_mihoro_config_and_user_mihomo_service_are_restored(self):
+        self.assertIn('"mihoro.toml"', self.core)
+        self.assertIn('USER_MIHOMO_REQUESTED=true', self.restore)
+        self.assertIn('systemctl --user restart mihomo.service', self.restore)
+        self.assertIn('$ELEVATOR systemctl disable --now mihomo.service', self.restore)
+
+    def test_complete_ai_backup_has_transactional_snapshots_and_manifest(self):
+        self.assertIn("src.backup(dst)", self.ai_state)
+        self.assertIn("PRAGMA quick_check", self.ai_state)
+        self.assertIn("ai_manifest.sha256", self.export)
+        self.assertIn("ai_verify_manifest", self.restore)
+
+    def test_mainstream_agent_history_roots_are_covered(self):
+        for path in (
+            '.claude',
+            '.codex',
+            '.gemini',
+            '.pi',
+            '.grok',
+            '.omp',
+            '.config/opencode',
+            '.local/share/opencode',
+        ):
+            self.assertIn(f'"{path}"', self.ai_state)
+
+    def test_standard_mode_uses_allowlist_not_history_denylist(self):
+        self.assertIn("AI_STANDARD_ITEMS", self.export)
+        self.assertNotIn('AI_EXCLUDES=(', self.export)
+        self.assertIn("Standard (credentials & configs only; no histories or plugins)", self.export)
+
+    def test_omp_profiles_and_opencode_database_overrides_are_registered(self):
+        self.assertIn("PI_CONFIG_DIR", self.export)
+        self.assertIn("PI_CODING_AGENT_DIR", self.export)
+        self.assertIn('"${omp_root}/profiles"', self.export)
+        self.assertIn("OPENCODE_DB", self.export)
+
+    def test_gui_does_not_offer_incomplete_system_backup(self):
+        self.assertNotIn("Skip Protected Files", self.qml)
+        self.assertNotIn("Skip System Files", self.qml)
+        self.assertNotIn("OMAMIGRATE_SKIP_PROTECTED_SYSTEM", self.qml)
+        self.assertIn("refusing to create an incomplete migration backup", self.export)
 
 
 if __name__ == "__main__":

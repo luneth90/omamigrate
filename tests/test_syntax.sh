@@ -21,14 +21,22 @@ if command -v python3 >/dev/null 2>&1; then
       echo "OK"
     fi
   done
-  python3 -m unittest discover -s "${ROOT_DIR}/tests" -p "test_*.py" -v
+python3 -m unittest discover -s "${ROOT_DIR}/tests" -p "test_*.py" -v
 fi
+
+echo "==> Testing restore two-run convergence..."
+"${ROOT_DIR}/tests/test_restore_idempotence.sh"
+
+echo "==> Testing AI session snapshots and path adaptation..."
+"${ROOT_DIR}/tests/test_ai_state.sh"
 
 echo "==> Checking executables..."
 test -x "${ROOT_DIR}/bin/omamigrate"
 test -x "${ROOT_DIR}/lib/export.sh"
 test -x "${ROOT_DIR}/lib/restore.sh"
+test -x "${ROOT_DIR}/lib/ai-state.sh"
 test -x "${ROOT_DIR}/lib/scan-archives.sh"
+test -x "${ROOT_DIR}/tests/test_ai_state.sh"
 
 echo "==> Testing archive discovery..."
 TEST_HOME="$(mktemp -d)"

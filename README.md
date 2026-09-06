@@ -30,7 +30,7 @@
 Traditional dotfiles sync tools (such as Git-based UI sync widgets) only copy basic configuration files (`~/.config/hypr`). When setting up a new computer, you are still left with hours of manual work:
 - Re-installing dozens of GUI applications and CLI packages;
 - Re-configuring network proxy services (**sing-box**, **Mihomo / Clash Verge**, **v2rayA**, **daed**, etc.) and system timers;
-- Re-authenticating all your **AI developer tools** (Claude Code, OpenAI Codex, Antigravity `agy`, Grok);
+- Re-authenticating all your **AI developer tools** (Claude Code, OpenAI Codex, Agy CLI, Pi, OMP, OpenCode, Grok);
 - Repairing broken automated services or email clients due to missing GPG keys or `pass` password stores;
 - Manually fixing broken absolute paths when your username on the new machine differs from the old machine.
 
@@ -41,7 +41,7 @@ Traditional dotfiles sync tools (such as Git-based UI sync widgets) only copy ba
   ├── Explicit Packages (Filtered)                          ├── Auto-install Packages (yay/pacman)
   ├── Proxy Ecosystem (sing-box/Mihomo/Clash/v2rayA/daed) === LocalSend (local network) ===> ├── Restore Services & Auto-enable Timers
   ├── Mail Profiles & Pass/GPG Keys     Archive (tar)       ├── Restore GPG Keys & Password Store
-  ├── AI Sessions (Claude/Codex/Agy)                        ├── Restore AI Credentials & Sessions
+  ├── AI Sessions (Claude/Codex/Agy/Pi/OMP/OpenCode/Grok)   ├── Restore AI Credentials & Sessions
   └── Desktop & Hyprland Configs                            └── Auto-adapt Username Paths & Reload
 ```
 
@@ -83,13 +83,21 @@ Whether you prefer background daemons or modern GUI desktop clients, OmaMigrate 
 ### 4. AI Credentials, Sessions & System Keyring Persistence
 - **Linux Secret Service & Keyring Sync**:
   - Automatically migrates **Linux System Keyrings** (`~/.local/share/keyrings/`), preserving encrypted credentials and OAuth tokens stored by **Antigravity CLI (`agy`)**, **VS Code**, **GitHub CLI**, and Chromium.
-- **Active AI Developer Tool Sessions**:
-  - **Antigravity CLI (`agy`)** (`~/.gemini/antigravity-cli/` & Secret Service Keyring)
+- **Supported AI CLI state**:
+  - **Agy CLI (`agy`)** (`~/.gemini/antigravity-cli/` & Secret Service Keyring)
   - **OpenAI Codex** (`~/.codex/auth.json`, `~/.codex/config.toml`)
   - **Claude Code** (`~/.claude.json`, `~/.claude/`)
+  - **Pi** (`~/.pi/`)
+  - **Oh My Pi / OMP** (`~/.omp/`, named profiles, XDG and `PI_CODING_AGENT_DIR` locations)
+  - **OpenCode** (`~/.config/opencode/`, `~/.local/share/opencode/`, `~/.local/state/opencode/`, XDG and `OPENCODE_DB` locations)
   - **xAI Grok** (`~/.grok/auth.json`)
   - **GitHub CLI (`gh`)** (`~/.config/gh/hosts.yml`)
+- **Standard vs. Complete**: Standard uses a strict config/credential allow-list and excludes histories and plugins. Complete adds histories, memories, skills/plugins, and uses transactionally consistent SQLite snapshots plus an integrity manifest.
+- Complete restore refuses to overwrite AI state while a supported agent is running. It removes stale WAL/lock files and translates structured project paths when the target username changes, without rewriting prompt or response text.
 - When saved tokens remain valid and the restored keyring can be unlocked, supported tools may retain their authenticated state. Some providers or applications may still require re-authentication.
+
+> [!NOTE]
+> Agent histories are migrated, but project source trees are not implicitly included. Restore or clone the corresponding workspaces as well; otherwise a resumed session can retain its transcript while referenced project files remain unavailable.
 
 > [!TIP]
 > **Best Practice Recommendation (Login Password)**:
@@ -98,7 +106,7 @@ Whether you prefer background daemons or modern GUI desktop clients, OmaMigrate 
 > - **If you use a different password on the new machine**: When launching `agy` or VS Code for the first time, a desktop prompt will ask to unlock the keyring. Simply enter your **old computer's password** once to unlock, and you can subsequently synchronize the keyring password via `seahorse` or system settings.
 
 ### 5. Smart Username & Path Adaptation
-- If your old username was `alice` and your new machine username is `bob`, OmaMigrate's restoration engine automatically sanitizes and rewrites hardcoded paths across configuration files (`.codex`, `.claude.json`, `antigravity-cli`, `git/config`).
+- If your old username was `alice` and your new machine username is `bob`, OmaMigrate's restoration engine rewrites known hardcoded paths across configuration files and structured AI session indexes, including Codex, Claude, Agy CLI, Pi, OMP, OpenCode, Grok, and Git.
 
 ### 6. Re-runnable & Fault-Tolerant Restoration
 - **Anti-Root Guard**: Prevents running the restore script with `sudo` to protect file ownership.
@@ -151,7 +159,7 @@ Press `SUPER + CTRL + M` anywhere on your Omarchy desktop to summon the OmaMigra
 
 1. **📦 Step 1: Create a Migration Backup**
    - Click the first button to filter hardware drivers and capture packages, AI tools and credentials, proxy services, dotfiles, and system configurations into `~/omamigrate-backup.tar.gz`.
-   - Choose **Standard** (recommended) for apps, AI credentials, proxy services, and configurations. Choose **Complete** to also include AI chat histories, sessions, and plugins; the backup may be large depending on your local data.
+   - Choose **Standard** (recommended) for apps, AI credentials, proxy services, and configurations. Choose **Complete** to also include AI chat histories, sessions, memories, and plugins; close supported AI CLIs before restoring a Complete archive. The backup may be large depending on your local data.
 2. **📡 Step 2: Direct Local Transfer**
    - Open the backup in LocalSend, then select a nearby target device for a direct local-network transfer without cloud storage. The receiving device normally saves it to `~/Downloads`.
 3. **⚡ Step 3: Restore on New Machine**

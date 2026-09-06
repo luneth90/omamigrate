@@ -25,7 +25,7 @@ jobs:
       - name: Install system dependencies
         run: |
           pacman -Sy --noconfirm archlinux-keyring
-          pacman -S --noconfirm --needed git jq ripgrep qt6-declarative qt6-base quickshell bash coreutils util-linux
+          pacman -S --noconfirm --needed git jq ripgrep rsync qt6-declarative qt6-base quickshell bash coreutils util-linux python
 
       - name: Create non-root test user
         run: |
@@ -147,4 +147,3 @@ jobs:
             --title "OmaMigrate ${TAG}" \
             --notes-file "${NOTES_FILE}" \
             --verify-tag
-
