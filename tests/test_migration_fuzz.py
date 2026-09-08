@@ -222,6 +222,13 @@ class TestRestoreContract(unittest.TestCase):
         self.assertNotIn("SUDO_ASKPASS_SCRIPT", self.restore)
         self.assertNotIn("askpass-", self.restore)
 
+    def test_force_close_button_contract(self):
+        self.assertIn("id: forceCloseBtn", self.qml)
+        self.assertIn("root.forceClose()", self.qml)
+        self.assertIn("function forceClose()", self.qml)
+        self.assertIn("terminateProcess", self.qml)
+        self.assertIn("z: 1000", self.qml)
+
 
 if __name__ == "__main__":
     unittest.main()

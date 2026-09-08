@@ -100,6 +100,46 @@ Item {
     }
   }
 
+  function terminateProcess(proc) {
+    if (!proc) return
+    try {
+      if (typeof proc.terminate === "function") proc.terminate()
+    } catch(e) {}
+    try {
+      if (typeof proc.kill === "function") proc.kill()
+    } catch(e) {}
+    try {
+      proc.running = false
+    } catch(e) {}
+  }
+
+  function forceClose() {
+    terminateProcess(exportProcess)
+    terminateProcess(restoreProcess)
+    terminateProcess(authProcess)
+    terminateProcess(checkExportAuthProcess)
+    terminateProcess(checkRestoreAuthProcess)
+    terminateProcess(scanArchiveProcess)
+    terminateProcess(sendProcess)
+    terminateProcess(reloadProcess)
+
+    root.isProcessing = false
+    root.authValidating = false
+    root.showPasswordPrompt = false
+    root.lockWarningActive = false
+    root.inputPassword = ""
+    root.pendingSecret = ""
+    root.exportSecret = ""
+    root.restoreSecret = ""
+    authProcess.secretBuffer = ""
+    root.authError = ""
+    root.opened = false
+
+    if (root.shell && typeof root.shell.hide === "function") {
+      root.shell.hide("luneth90.omamigrate")
+    }
+  }
+
   function scanArchives() {
     if (scanArchiveProcess.running) return
     root.archiveScanError = ""
@@ -316,12 +356,44 @@ Item {
         }
       }
 
+      // Force Close Button in Upper Right Corner (Always interactive, z above processing shield)
+      Rectangle {
+        id: forceCloseBtn
+        anchors.top: card.top
+        anchors.right: card.right
+        anchors.topMargin: 16
+        anchors.rightMargin: 16
+        width: 28
+        height: 28
+        radius: 14
+        z: 1000
+        color: forceCloseMouse.pressed ? "#eba0ac" : (forceCloseMouse.containsMouse ? (root.isProcessing ? "#45475a" : "#313244") : "transparent")
+        border.color: forceCloseMouse.containsMouse ? (root.isProcessing ? "#f38ba8" : "#45475a") : "transparent"
+        border.width: 1
+
+        Text {
+          anchors.centerIn: parent
+          text: "✕"
+          font.pixelSize: 14
+          font.bold: true
+          color: forceCloseMouse.containsMouse ? (root.isProcessing ? "#f38ba8" : "#cdd6f4") : "#6c7086"
+        }
+
+        MouseArea {
+          id: forceCloseMouse
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.forceClose()
+        }
+      }
+
       ColumnLayout {
         anchors.fill: parent
         anchors.margins: 20
         spacing: 12
 
-        // Top Row: Title + Close Button
+        // Top Row: Title + Header Area
         RowLayout {
           Layout.fillWidth: true
           spacing: 8
@@ -335,32 +407,10 @@ Item {
 
           Item { Layout.fillWidth: true }
 
-          Rectangle {
-            width: 26
-            height: 26
-            radius: 13
-            color: root.isProcessing ? "transparent" : (closeMouse.containsMouse ? "#313244" : "transparent")
-
-            Text {
-              anchors.centerIn: parent
-              text: root.isProcessing ? "🔒" : "✕"
-              font.pixelSize: root.isProcessing ? 12 : 13
-              color: root.isProcessing ? "#6c7086" : (closeMouse.containsMouse ? "#cdd6f4" : "#6c7086")
-            }
-
-            MouseArea {
-              id: closeMouse
-              anchors.fill: parent
-              hoverEnabled: !root.isProcessing
-              cursorShape: root.isProcessing ? Qt.ForbiddenCursor : Qt.PointingHandCursor
-              onClicked: {
-                if (root.isProcessing) {
-                  root.notifyLocked()
-                } else {
-                  root.dismiss()
-                }
-              }
-            }
+          // Placeholder reserving space for the top-right force close button
+          Item {
+            width: 28
+            height: 28
           }
         }
 
