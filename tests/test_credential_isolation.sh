@@ -36,6 +36,30 @@ if grep -q "SUDO_ASKPASS_SCRIPT" "${ROOT_DIR}/lib/restore.sh"; then
   exit 1
 fi
 
+# Guard 6: Ensure secrets are not retained across QML lifecycle properties
+if grep -E "exportSecret|restoreSecret|pendingSecret" "${ROOT_DIR}/OmaMigrate.qml"; then
+  echo "FAIL: exportSecret, restoreSecret, or pendingSecret must not exist in OmaMigrate.qml" >&2
+  exit 1
+fi
+
+# Guard 7: Ensure clearEnvironment: true is configured for Process definitions in OmaMigrate.qml
+if ! grep -q "clearEnvironment: true" "${ROOT_DIR}/OmaMigrate.qml"; then
+  echo "FAIL: clearEnvironment: true must be configured in OmaMigrate.qml" >&2
+  exit 1
+fi
+
+# Guard 8: Ensure lib/export.sh and lib/restore.sh do not read SUDO_PASS from stdin
+if grep -E "read.*SUDO_PASS" "${ROOT_DIR}/lib/export.sh" "${ROOT_DIR}/lib/restore.sh" 2>/dev/null; then
+  echo "FAIL: lib/export.sh and lib/restore.sh must not read SUDO_PASS from stdin" >&2
+  exit 1
+fi
+
+# Guard 9: Ensure absolute binary paths are used in OmaMigrate.qml Process invocations
+if grep -E 'command:\s*\[\s*"(sudo|bash)"' "${ROOT_DIR}/OmaMigrate.qml"; then
+  echo "FAIL: OmaMigrate.qml must use absolute paths (/usr/bin/...) for commands" >&2
+  exit 1
+fi
+
 echo "  -> Static checks passed."
 
 echo "==> [Credential Isolation] 2. Dynamic Process Inspection via Mock Privileged Flow..."
@@ -49,7 +73,8 @@ LOG_DIR="${TEST_DIR}/logs"
 mkdir -p "${LOG_DIR}"
 
 echo "${CANARY_SECRET}" > "${TEST_DIR}/canary_expected.txt"
-chmod 600 "${TEST_DIR}/canary_expected.txt"
+echo "${CANARY_SECRET}" > "/tmp/canary_expected.txt"
+chmod 600 "${TEST_DIR}/canary_expected.txt" "/tmp/canary_expected.txt"
 
 # Create mock sudo that checks stdin, argv, and environ
 cat << 'EOF' > "${MOCK_BIN}/sudo"
@@ -57,7 +82,11 @@ cat << 'EOF' > "${MOCK_BIN}/sudo"
 set -eu
 
 LOG_FILE="${TEST_MOCK_LOG:-/tmp/sudo_mock.log}"
-CANARY="$(cat "${TEST_DIR}/canary_expected.txt")"
+CANARY_FILE="${TEST_DIR:-/tmp}/canary_expected.txt"
+if [[ ! -f "$CANARY_FILE" ]]; then
+  CANARY_FILE="/tmp/canary_expected.txt"
+fi
+CANARY="$(cat "$CANARY_FILE")"
 
 # Check argv for leaked canary
 for arg in "$@"; do
@@ -78,7 +107,7 @@ if [[ "${1:-}" == "-S" ]]; then
   read -r input_pass
   if [[ "$input_pass" == "$CANARY" ]]; then
     echo "STDIN_CANARY_VERIFIED_SAFELY" >> "$LOG_FILE"
-    touch "${TEST_DIR}/sudo_timestamp"
+    touch "${TEST_DIR:-/tmp}/sudo_timestamp"
     exit 0
   else
     echo "STDIN_CANARY_MISMATCH" >> "$LOG_FILE"
@@ -88,7 +117,7 @@ fi
 
 # Simulate sudo -n true / sudo -n -v
 if [[ "${1:-}" == "-n" ]]; then
-  if [[ -f "${TEST_DIR}/sudo_timestamp" ]]; then
+  if [[ -f "${TEST_DIR:-/tmp}/sudo_timestamp" ]]; then
     echo "TIMESTAMP_CACHE_VALID" >> "$LOG_FILE"
     exit 0
   else
@@ -282,5 +311,96 @@ if find "${CACHE_TEST_DIR}" -name "*askpass*" 2>/dev/null | grep -q .; then
   exit 1
 fi
 
+echo "==> [Credential Isolation] 4. Regression Tests: Worker Zero-Credential & PATH Defense..."
+
+# Extract runnerPythonCode directly from OmaMigrate.qml
+RUNNER_SCRIPT="${TEST_DIR}/runner.py"
+python3 -c "
+import re
+with open('${ROOT_DIR}/OmaMigrate.qml') as f:
+    c = f.read()
+m = re.search(r'readonly property string runnerPythonCode:\s*\x60([^\x60]+)\x60', c)
+if not m:
+    raise RuntimeError('Could not extract runnerPythonCode from OmaMigrate.qml')
+with open('${RUNNER_SCRIPT}', 'w') as out:
+    out.write(m.group(1))
+"
+
+# Regression Test 1: Worker Substitution Attack Defense (Zero Credential Bytes)
+echo "  Testing Worker Substitution: worker receives zero credential bytes on stdin..."
+WORKER_LOG="${TEST_DIR}/worker_received.log"
+cat << EOF > "${TEST_DIR}/mock_worker.sh"
+#!/usr/bin/env bash
+read -r -t 1 worker_stdin || worker_stdin=""
+echo "WORKER_RECEIVED_BYTES:\${#worker_stdin}" > "${WORKER_LOG}"
+echo "WORKER_STDIN:\${worker_stdin}" >> "${WORKER_LOG}"
+exit 0
+EOF
+chmod 755 "${TEST_DIR}/mock_worker.sh"
+
+> "${TEST_MOCK_LOG}"
+> /tmp/sudo_mock.log
+rm -f "${TEST_DIR}/sudo_timestamp"
+printf '%s\n' "${CANARY_SECRET}" | OMAMIGRATE_TEST_SUDO="${MOCK_BIN}/sudo" python3 "${RUNNER_SCRIPT}" "backup" "${TEST_DIR}/mock_worker.sh" "0"
+
+if ! grep -q "STDIN_CANARY_VERIFIED_SAFELY" "${TEST_MOCK_LOG}" 2>/dev/null && ! grep -q "STDIN_CANARY_VERIFIED_SAFELY" /tmp/sudo_mock.log 2>/dev/null; then
+  echo "FAIL: Sudo did not receive canary password during runner execution" >&2
+  exit 1
+fi
+
+if ! grep -q "WORKER_RECEIVED_BYTES:0" "${WORKER_LOG}"; then
+  echo "FAIL: Worker received non-zero credential bytes on stdin!" >&2
+  cat "${WORKER_LOG}" >&2
+  exit 1
+fi
+echo "  -> Verified: worker script received 0 credential bytes (stdin disconnected to /dev/null)."
+
+# Regression Test 2: PATH Substitution Attack Defense
+echo "  Testing PATH substitution hijacking resistance..."
+POISON_DIR="${TEST_DIR}/poison"
+mkdir -p "${POISON_DIR}"
+cat << 'EOF' > "${POISON_DIR}/sudo"
+#!/bin/sh
+echo "POISONED_SUDO_EXECUTED" >> "${TEST_DIR}/poison_exec.log"
+exit 99
+EOF
+chmod 755 "${POISON_DIR}/sudo"
+
+cat << 'EOF' > "${POISON_DIR}/bash"
+#!/bin/sh
+echo "POISONED_BASH_EXECUTED" >> "${TEST_DIR}/poison_exec.log"
+exit 99
+EOF
+chmod 755 "${POISON_DIR}/bash"
+
+# Run with poisoned PATH prepended
+(
+  export PATH="${POISON_DIR}:${PATH}"
+  # Executing via system bash should never invoke poisoned binaries in PATH
+  /usr/bin/bash "${ROOT_DIR}/bin/omamigrate" status >/dev/null 2>&1 || true
+  # Runner execution with clean_env should never invoke poisoned binaries in PATH
+  printf 'test\n' | OMAMIGRATE_TEST_SUDO="${MOCK_BIN}/sudo" python3 "${RUNNER_SCRIPT}" "backup" "${TEST_DIR}/mock_worker.sh" "0" >/dev/null 2>&1 || true
+)
+
+if [ -f "${TEST_DIR}/poison_exec.log" ]; then
+  echo "FAIL: Poisoned binary in PATH was executed!" >&2
+  cat "${TEST_DIR}/poison_exec.log" >&2
+  exit 1
+fi
+echo "  -> Verified: absolute system paths prevent PATH hijacking."
+
+# Regression Test 3: Sudo SetUID Integrity Verification
+echo "  Testing sudo integrity enforcement..."
+STATUS_CODE=0
+printf 'test\n' | OMAMIGRATE_TEST_VERIFY=1 OMAMIGRATE_TEST_SUDO="${POISON_DIR}/sudo" \
+  python3 "${RUNNER_SCRIPT}" "backup" "/bin/true" "0" >/dev/null 2>&1 || STATUS_CODE=$?
+
+if [ "${STATUS_CODE}" -ne 2 ]; then
+  echo "FAIL: Runner did not reject invalid sudo binary (expected exit code 2, got ${STATUS_CODE})" >&2
+  exit 1
+fi
+echo "  -> Verified: non-setuid or rogue sudo binaries are strictly rejected."
+
+rm -f /tmp/canary_expected.txt /tmp/sudo_mock.log
 rm -rf "${TEST_DIR}"
 echo "==> [Credential Isolation] All tests passed! Credential exposure path completely eliminated."
