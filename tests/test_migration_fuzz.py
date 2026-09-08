@@ -224,6 +224,15 @@ class TestRestoreContract(unittest.TestCase):
         self.assertIn("/usr/bin/sudo", self.qml)
         self.assertIn("/usr/bin/bash", self.qml)
         self.assertIn("runnerPythonCode", self.qml)
+        # Extract runnerPythonCode from OmaMigrate.qml
+        import re
+        m = re.search(r"readonly property string runnerPythonCode:\s*\x60([^\x60]+)\x60", self.qml)
+        self.assertIsNotNone(m, "runnerPythonCode must be defined in OmaMigrate.qml")
+        runner_code = m.group(1)
+        self.assertNotIn("\\", runner_code, "runnerPythonCode must contain zero backslashes to prevent JS template literal escaping corruption")
+        self.assertIn("bytes([10])", runner_code)
+        # Verify it compiles as valid Python syntax
+        compile(runner_code, "<runner_test>", "exec")
         self.assertNotIn("SUDO_ASKPASS_SCRIPT", self.restore)
         self.assertNotIn("askpass-", self.restore)
 
