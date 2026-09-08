@@ -96,7 +96,7 @@ if pid == 0:
             env=clean_env,
             close_fds=True
         )
-        p.communicate(input=raw_pass.encode("utf-8") + b"\n")
+        p.communicate(input=raw_pass.encode("utf-8") + bytes([10]))
         raw_pass = None
         if p.returncode != 0:
             print("AUTH_FAILED", file=sys.stderr)
