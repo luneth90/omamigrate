@@ -31,6 +31,15 @@ rm -rf "${STAGING_BASE}/export-"* 2>/dev/null || true
 BACKUP_DIR="$(mktemp -d "${STAGING_BASE}/export-XXXXXX")"
 trap 'rm -rf "${BACKUP_DIR:-}"' EXIT INT TERM
 
+# Privilege Elevation Initialization: Authenticate once via stdin stream if non-interactive
+if ! sudo -n true 2>/dev/null; then
+  if [ ! -t 0 ]; then
+    if IFS= read -r -t 1 -s SUDO_PASS; then
+      printf '%s\n' "$SUDO_PASS" | sudo -S -p "" -v 2>/dev/null || true
+      unset SUDO_PASS
+    fi
+  fi
+fi
 
 msg_info "Creating OmaMigrate migration backup..."
 msg_step "Creating staging directory: ${BACKUP_DIR}"
@@ -375,6 +384,18 @@ if [ "${#unreadable_paths[@]}" -gt 0 ]; then
   for p in "${unreadable_paths[@]}"; do
     tar_args+=("${p#/}")
   done
+
+  if ! sudo -n true 2>/dev/null; then
+    if [ -t 0 ]; then
+      msg_step "Requesting administrator privileges..."
+      sudo -v || { msg_error "Administrator authentication failed."; exit 1; }
+    else
+      if IFS= read -r -t 1 -s SUDO_PASS; then
+        printf '%s\n' "$SUDO_PASS" | sudo -S -p "" -v 2>/dev/null || true
+        unset SUDO_PASS
+      fi
+    fi
+  fi
 
   if sudo -n true 2>/dev/null; then
     ELEVATOR="sudo -n"

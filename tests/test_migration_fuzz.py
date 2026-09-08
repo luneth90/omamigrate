@@ -215,6 +215,8 @@ class TestRestoreContract(unittest.TestCase):
         self.assertNotIn("OMAMIGRATE_SUDO_PASS", self.restore)
         self.assertNotIn("savedPassword", self.qml)
         self.assertIn("stdinEnabled: true", self.qml)
+        self.assertIn("exportSecret", self.qml)
+        self.assertIn("restoreSecret", self.qml)
         self.assertNotIn("SUDO_ASKPASS_SCRIPT", self.restore)
         self.assertNotIn("askpass-", self.restore)
 

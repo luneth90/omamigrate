@@ -54,6 +54,9 @@ Item {
   property bool authValidating: false
   property string pendingAction: "export" // "export" | "restore"
   property string lastExportedArchive: ""
+  property string pendingSecret: ""
+  property string exportSecret: ""
+  property string restoreSecret: ""
 
   readonly property string cliPath: String(Qt.resolvedUrl("bin/omamigrate")).replace("file://", "")
   readonly property string archiveScannerPath: String(Qt.resolvedUrl("lib/scan-archives.sh")).replace("file://", "")
@@ -72,6 +75,9 @@ Item {
     root.opened = false
     root.showPasswordPrompt = false
     root.inputPassword = ""
+    root.pendingSecret = ""
+    root.exportSecret = ""
+    root.restoreSecret = ""
     authProcess.secretBuffer = ""
     root.authError = ""
   }
@@ -84,6 +90,9 @@ Item {
     root.opened = false
     root.showPasswordPrompt = false
     root.inputPassword = ""
+    root.pendingSecret = ""
+    root.exportSecret = ""
+    root.restoreSecret = ""
     authProcess.secretBuffer = ""
     root.authError = ""
     if (root.shell && typeof root.shell.hide === "function") {
@@ -103,6 +112,9 @@ Item {
     root.isProcessing = false
     root.showPasswordPrompt = false
     root.inputPassword = ""
+    root.pendingSecret = ""
+    root.exportSecret = ""
+    root.restoreSecret = ""
     authProcess.secretBuffer = ""
     root.authError = ""
     root.statusText = "Ready"
@@ -111,22 +123,24 @@ Item {
     root.scanArchives()
   }
 
-  function startExport() {
+  function startExport(secret) {
     root.showPasswordPrompt = false
     root.lastExportedArchive = ""
     root.isProcessing = true
     root.statusText = "Creating migration backup..."
     root.inputPassword = ""
+    root.pendingSecret = ""
     authProcess.secretBuffer = ""
+    root.exportSecret = (secret !== undefined && secret !== null) ? String(secret) : ""
     exportProcess.command = [
       "bash", "-c",
       "OMAMIGRATE_FULL_AI=" + (root.includeAiHistory ? "1" : "0") +
-      " \"" + root.cliPath + "\" backup\n"
+      " exec \"" + root.cliPath + "\" backup\n"
     ]
     exportProcess.running = true
   }
 
-  function startRestore() {
+  function startRestore(secret) {
     if (!root.selectedArchive) {
       root.statusText = "Error: No backup selected."
       return
@@ -135,11 +149,13 @@ Item {
     root.isProcessing = true
     root.statusText = "Restoring system..."
     root.inputPassword = ""
+    root.pendingSecret = ""
     authProcess.secretBuffer = ""
+    root.restoreSecret = (secret !== undefined && secret !== null) ? String(secret) : ""
     var archive = root.selectedArchive
     restoreProcess.command = [
       "bash", "-c",
-      "OMAMIGRATE_GUI=1 \"" + root.cliPath + "\" restore \"$0\"\n",
+      "OMAMIGRATE_GUI=1 exec \"" + root.cliPath + "\" restore \"$0\"\n",
       archive
     ]
     restoreProcess.running = true
@@ -166,6 +182,7 @@ Item {
     root.authValidating = true
     root.authError = ""
     authProcess.secretBuffer = root.inputPassword
+    root.pendingSecret = root.inputPassword
     root.inputPassword = ""
     authProcess.running = true
   }
@@ -568,6 +585,9 @@ Item {
                 onClicked: {
                   root.showPasswordPrompt = false
                   root.inputPassword = ""
+                  root.pendingSecret = ""
+                  root.exportSecret = ""
+                  root.restoreSecret = ""
                   authProcess.secretBuffer = ""
                   root.authError = ""
                   root.isProcessing = false
@@ -1645,7 +1665,7 @@ Item {
           root.showPasswordPrompt = true
           Qt.callLater(function() { passwordInput.forceActiveFocus() })
         } else {
-          root.startExport()
+          root.startExport("")
         }
       }
     }
@@ -1667,7 +1687,7 @@ Item {
           root.showPasswordPrompt = true
           Qt.callLater(function() { passwordInput.forceActiveFocus() })
         } else {
-          root.startRestore()
+          root.startRestore("")
         }
       }
     }
@@ -1691,12 +1711,15 @@ Item {
       if (code === 0) {
         root.showPasswordPrompt = false
         root.authError = ""
+        var secret = root.pendingSecret
+        root.pendingSecret = ""
         if (root.pendingAction === "export") {
-          root.startExport()
+          root.startExport(secret)
         } else if (root.pendingAction === "restore") {
-          root.startRestore()
+          root.startRestore(secret)
         }
       } else {
+        root.pendingSecret = ""
         root.authError = "Incorrect password. Please try again."
         passwordInput.selectAll()
         passwordInput.forceActiveFocus()
@@ -1706,6 +1729,13 @@ Item {
 
   Process {
     id: exportProcess
+    stdinEnabled: true
+    onStarted: {
+      if (root.exportSecret.length > 0) {
+        exportProcess.write(root.exportSecret + "\n")
+        root.exportSecret = ""
+      }
+    }
     stdout: SplitParser {
       onRead: function(line) {
         var clean = String(line).replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "").trim()
@@ -1728,6 +1758,7 @@ Item {
     }
     onExited: function(code) {
       root.isProcessing = false
+      root.exportSecret = ""
       if (code === 0) {
         root.exportStep = 2
         if (root.lastExportedArchive) {
@@ -1768,6 +1799,13 @@ Item {
 
   Process {
     id: restoreProcess
+    stdinEnabled: true
+    onStarted: {
+      if (root.restoreSecret.length > 0) {
+        restoreProcess.write(root.restoreSecret + "\n")
+        root.restoreSecret = ""
+      }
+    }
     stdout: SplitParser {
       onRead: function(line) {
         var clean = String(line).replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "").trim()
@@ -1786,6 +1824,7 @@ Item {
     }
     onExited: function(code) {
       root.isProcessing = false
+      root.restoreSecret = ""
       if (code === 0) {
         root.restoreStep = 2
         root.statusText = "Restoration completed successfully!"
