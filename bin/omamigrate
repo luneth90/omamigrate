@@ -226,7 +226,7 @@ cmd_restore() {
 
   msg_info "Opening migration backup: $(basename "$archive")"
   msg_step "Extracting backup contents..."
-  if ! tar -xzf "$archive" -C "$RESTORE_DIR"; then
+  if ! tar -xzf "$archive" -C "$RESTORE_DIR" < /dev/null; then
     msg_error "Failed to extract the backup. Verify the file and available disk space."
     exit 1
   fi

@@ -156,6 +156,8 @@ class TestRestoreContract(unittest.TestCase):
         self.assertNotIn("pacman -Sy --noconfirm", self.restore)
         self.assertIn('NATIVE_PKGS+=("$pkg")', self.restore)
         self.assertIn('AUR_PKGS+=("$pkg")', self.restore)
+        self.assertNotIn("--sudoloop", self.restore)
+        self.assertIn('--sudoflags "-n"', self.restore)
 
     def test_restore_archive_is_not_modified_and_shell_profiles_are_exported(self):
         self.assertNotIn('rm -rf "${RESTORE_DATA_DIR}/user_home', self.restore)
@@ -219,6 +221,13 @@ class TestRestoreContract(unittest.TestCase):
         self.assertIn("restoreSecret", self.qml)
         self.assertNotIn("SUDO_ASKPASS_SCRIPT", self.restore)
         self.assertNotIn("askpass-", self.restore)
+
+    def test_force_close_button_contract(self):
+        self.assertIn("id: forceCloseBtn", self.qml)
+        self.assertIn("root.forceClose()", self.qml)
+        self.assertIn("function forceClose()", self.qml)
+        self.assertIn("terminateProcess", self.qml)
+        self.assertIn("z: 1000", self.qml)
 
 
 if __name__ == "__main__":
