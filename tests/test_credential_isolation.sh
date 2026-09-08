@@ -115,12 +115,12 @@ PIPE_MONITOR_LOG="${LOG_DIR}/pipe_proc_monitor.log"
     for pid in /proc/[0-9]*; do
       [ -d "$pid" ] || continue
       if [ -r "$pid/cmdline" ]; then
-        if tr '\0' ' ' < "$pid/cmdline" 2>/dev/null | grep -q "$CANARY_SECRET"; then
+        if cat "$pid/cmdline" 2>/dev/null | tr '\0' ' ' | grep -q "$CANARY_SECRET"; then
           echo "LEAK_FOUND_IN_PROCFS_CMDLINE: $pid" >> "$PIPE_MONITOR_LOG"
         fi
       fi
       if [ -r "$pid/environ" ]; then
-        if tr '\0' '\n' < "$pid/environ" 2>/dev/null | grep -q "$CANARY_SECRET"; then
+        if cat "$pid/environ" 2>/dev/null | tr '\0' '\n' | grep -q "$CANARY_SECRET"; then
           if [ "$pid" != "/proc/$$" ] && [ "$pid" != "/proc/$BASHPID" ]; then
             echo "LEAK_FOUND_IN_PROCFS_ENVIRON: $pid" >> "$PIPE_MONITOR_LOG"
           fi
@@ -148,6 +148,44 @@ if ! grep -q "STDIN_CANARY_VERIFIED_SAFELY" "${TEST_MOCK_LOG}"; then
   exit 1
 fi
 echo "  -> Direct stdin pipe verified: secret absent from argv and environ."
+
+# Test omamigrate backup stdin elevation streaming & zero /proc exposure
+echo "  Testing omamigrate backup stdin elevation stream & zero /proc exposure..."
+BACKUP_OUT="${TEST_DIR}/test_backup.tar.gz"
+rm -f "${TEST_DIR}/sudo_timestamp"
+BACKUP_MONITOR_LOG="${LOG_DIR}/backup_proc_monitor.log"
+(
+  while true; do
+    for pid in /proc/[0-9]*; do
+      [ -d "$pid" ] || continue
+      if [ -r "$pid/cmdline" ]; then
+        if cat "$pid/cmdline" 2>/dev/null | tr '\0' ' ' | grep -q "$CANARY_SECRET"; then
+          echo "LEAK_FOUND_IN_PROCFS_CMDLINE: $pid" >> "$BACKUP_MONITOR_LOG"
+        fi
+      fi
+      if [ -r "$pid/environ" ]; then
+        if cat "$pid/environ" 2>/dev/null | tr '\0' '\n' | grep -q "$CANARY_SECRET"; then
+          if [ "$pid" != "/proc/$$" ] && [ "$pid" != "/proc/$BASHPID" ]; then
+            echo "LEAK_FOUND_IN_PROCFS_ENVIRON: $pid" >> "$BACKUP_MONITOR_LOG"
+          fi
+        fi
+      fi
+    done
+    sleep 0.01
+  done
+) &
+BACKUP_MONITOR_PID=$!
+
+printf '%s\n' "${CANARY_SECRET}" | "${ROOT_DIR}/bin/omamigrate" backup "${BACKUP_OUT}" >/dev/null 2>&1 || true
+kill "${BACKUP_MONITOR_PID}" 2>/dev/null || true
+wait "${BACKUP_MONITOR_PID}" 2>/dev/null || true
+
+if [ -s "${BACKUP_MONITOR_LOG}" ]; then
+  echo "FAIL: Canary secret detected in /proc during backup stdin stream:" >&2
+  cat "${BACKUP_MONITOR_LOG}" >&2
+  exit 1
+fi
+echo "  -> Backup stdin elevation verified: zero /proc exposure."
 
 # If graphical display is active, also test live Quickshell process execution
 if command -v quickshell >/dev/null 2>&1 && { [ -n "${WAYLAND_DISPLAY:-}" ] || [ -n "${DISPLAY:-}" ]; }; then
@@ -194,12 +232,12 @@ EOF
       for pid in /proc/[0-9]*; do
         [ -d "$pid" ] || continue
         if [ -r "$pid/cmdline" ]; then
-          if tr '\0' ' ' < "$pid/cmdline" 2>/dev/null | grep -q "$CANARY_SECRET"; then
+          if cat "$pid/cmdline" 2>/dev/null | tr '\0' ' ' | grep -q "$CANARY_SECRET"; then
             echo "LEAK_FOUND_IN_PROCFS_CMDLINE: $pid" >> "$MONITOR_LOG"
           fi
         fi
         if [ -r "$pid/environ" ]; then
-          if tr '\0' '\n' < "$pid/environ" 2>/dev/null | grep -q "$CANARY_SECRET"; then
+          if cat "$pid/environ" 2>/dev/null | tr '\0' '\n' | grep -q "$CANARY_SECRET"; then
             if [ "$pid" != "/proc/$$" ] && [ "$pid" != "/proc/$BASHPID" ]; then
               echo "LEAK_FOUND_IN_PROCFS_ENVIRON: $pid" >> "$MONITOR_LOG"
             fi

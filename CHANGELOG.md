@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-09-08
+
+### Fixed
+- **GUI Process Privilege Elevation**: Fix non-TTY sudo privilege elevation where `sudo` child processes inside subshells could not access Quickshell's parent process credentials under standard `timestamp_type = tty` / `ppid` policies.
+- **Pipeline Stdin Credential Delivery**: Directly forward validated credentials via standard input pipe into `export.sh` and `restore.sh`, authenticating within the execution process tree with immediate zeroing of secrets from memory, maintaining full compliance with process isolation rules (no `argv`, no `environ`, no disk artifacts).
+- **Interactive Terminal Sudo Prompt**: Explicitly prompt with `sudo -v` in interactive terminal sessions before running protected archive pipelines to ensure seamless execution.
+
 ## [1.1.1] - 2026-09-08
 
 ### Security & Hardening
