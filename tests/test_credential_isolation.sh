@@ -360,14 +360,14 @@ echo "  Testing PATH substitution hijacking resistance..."
 POISON_DIR="${TEST_DIR}/poison"
 mkdir -p "${POISON_DIR}"
 cat << 'EOF' > "${POISON_DIR}/sudo"
-#!/usr/bin/env bash
+#!/bin/sh
 echo "POISONED_SUDO_EXECUTED" >> "${TEST_DIR}/poison_exec.log"
 exit 99
 EOF
 chmod 755 "${POISON_DIR}/sudo"
 
 cat << 'EOF' > "${POISON_DIR}/bash"
-#!/usr/bin/env bash
+#!/bin/sh
 echo "POISONED_BASH_EXECUTED" >> "${TEST_DIR}/poison_exec.log"
 exit 99
 EOF
@@ -376,8 +376,10 @@ chmod 755 "${POISON_DIR}/bash"
 # Run with poisoned PATH prepended
 (
   export PATH="${POISON_DIR}:${PATH}"
-  # Executing via omamigrate should use absolute /usr/bin/bash and /usr/bin/sudo
-  "${ROOT_DIR}/bin/omamigrate" status >/dev/null 2>&1 || true
+  # Executing via system bash should never invoke poisoned binaries in PATH
+  /usr/bin/bash "${ROOT_DIR}/bin/omamigrate" status >/dev/null 2>&1 || true
+  # Runner execution with clean_env should never invoke poisoned binaries in PATH
+  printf 'test\n' | OMAMIGRATE_TEST_SUDO="${MOCK_BIN}/sudo" python3 "${RUNNER_SCRIPT}" "backup" "${TEST_DIR}/mock_worker.sh" "0" >/dev/null 2>&1 || true
 )
 
 if [ -f "${TEST_DIR}/poison_exec.log" ]; then
@@ -390,18 +392,8 @@ echo "  -> Verified: absolute system paths prevent PATH hijacking."
 # Regression Test 3: Sudo SetUID Integrity Verification
 echo "  Testing sudo integrity enforcement..."
 STATUS_CODE=0
-python3 -c "
-import sys, os, stat
-# Test that fake non-setuid sudo path fails verification
-fake_sudo = '${POISON_DIR}/sudo'
-st = os.stat(fake_sudo)
-if fake_sudo == '/usr/bin/sudo':
-    sys.exit(0)
-# Runner enforces /usr/bin/sudo checks:
-if st.st_uid != 0 or not (st.st_mode & stat.S_ISUID):
-    sys.exit(2)
-sys.exit(0)
-" || STATUS_CODE=$?
+printf 'test\n' | OMAMIGRATE_TEST_VERIFY=1 OMAMIGRATE_TEST_SUDO="${POISON_DIR}/sudo" \
+  python3 "${RUNNER_SCRIPT}" "backup" "/bin/true" "0" >/dev/null 2>&1 || STATUS_CODE=$?
 
 if [ "${STATUS_CODE}" -ne 2 ]; then
   echo "FAIL: Runner did not reject invalid sudo binary (expected exit code 2, got ${STATUS_CODE})" >&2

@@ -68,7 +68,7 @@ extra_arg = sys.argv[3] if len(sys.argv) > 3 else ""
 sudo_path = os.environ.get("OMAMIGRATE_TEST_SUDO", "/usr/bin/sudo")
 try:
     st = os.stat(sudo_path)
-    if sudo_path == "/usr/bin/sudo":
+    if sudo_path == "/usr/bin/sudo" or os.environ.get("OMAMIGRATE_TEST_VERIFY", "") == "1":
         if st.st_uid != 0 or st.st_gid != 0 or not (st.st_mode & stat.S_ISUID) or (st.st_mode & 0o022):
             print("SECURITY_VERIFY_FAILED", file=sys.stderr)
             sys.exit(2)
@@ -106,14 +106,14 @@ if pid == 0:
     os.dup2(devnull, 0)
     os.close(devnull)
     if action == "backup":
-        cmd = 'OMAMIGRATE_FULL_AI=' + extra_arg + ' exec "' + cli_path + '" backup'
-        os.execl("/usr/bin/bash", "/usr/bin/bash", "-c", cmd)
+        cmd = 'OMAMIGRATE_FULL_AI="$1" exec "$0" backup'
+        os.execl("/usr/bin/bash", "/usr/bin/bash", "-c", cmd, cli_path, extra_arg)
     elif action == "restore":
-        cmd = 'OMAMIGRATE_GUI=1 exec "' + cli_path + '" restore "$0"'
-        os.execl("/usr/bin/bash", "/usr/bin/bash", "-c", cmd, extra_arg)
+        cmd = 'OMAMIGRATE_GUI=1 exec "$0" restore "$1"'
+        os.execl("/usr/bin/bash", "/usr/bin/bash", "-c", cmd, cli_path, extra_arg)
     else:
-        cmd = 'exec "' + cli_path + '" ' + action
-        os.execl("/usr/bin/bash", "/usr/bin/bash", "-c", cmd)
+        cmd = 'exec "$0" "$1"'
+        os.execl("/usr/bin/bash", "/usr/bin/bash", "-c", cmd, cli_path, action)
 else:
     raw_pass = None
     del raw_pass
