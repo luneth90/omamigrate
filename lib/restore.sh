@@ -581,7 +581,7 @@ if [ -f "$PKG_FILE" ]; then
     if [ ${#AUR_PKGS[@]} -gt 0 ]; then
       if command -v yay >/dev/null 2>&1; then
         msg_step "Installing ${#AUR_PKGS[@]} AUR packages with yay..."
-        yay -S --needed --noconfirm --sudoloop --answerclean None --answerdiff None --answeredit None "${AUR_PKGS[@]}" || \
+        yay -S --needed --noconfirm --sudoflags "-n" --answerclean None --answerdiff None --answeredit None "${AUR_PKGS[@]}" < /dev/null || \
           msg_warn "Some AUR packages could not be installed: ${AUR_PKGS[*]}"
       else
         msg_warn "AUR packages require yay and were not installed: ${AUR_PKGS[*]}"

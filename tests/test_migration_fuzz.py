@@ -156,6 +156,8 @@ class TestRestoreContract(unittest.TestCase):
         self.assertNotIn("pacman -Sy --noconfirm", self.restore)
         self.assertIn('NATIVE_PKGS+=("$pkg")', self.restore)
         self.assertIn('AUR_PKGS+=("$pkg")', self.restore)
+        self.assertNotIn("--sudoloop", self.restore)
+        self.assertIn('--sudoflags "-n"', self.restore)
 
     def test_restore_archive_is_not_modified_and_shell_profiles_are_exported(self):
         self.assertNotIn('rm -rf "${RESTORE_DATA_DIR}/user_home', self.restore)
