@@ -10,7 +10,7 @@ LIB_DIR="$(cd "${BIN_DIR}/../lib" && pwd)"
 source "${LIB_DIR}/core.sh"
 source "${LIB_DIR}/ai-state.sh"
 
-VERSION="1.1.2"
+VERSION="1.1.4"
 
 show_help() {
   cat << HELP_TXT
@@ -181,7 +181,7 @@ cmd_backup() {
     shift
   done
 
-  OMAMIGRATE_FULL_AI="$full_ai" exec bash "${LIB_DIR}/export.sh" "$target"
+  OMAMIGRATE_FULL_AI="$full_ai" exec /usr/bin/bash "${LIB_DIR}/export.sh" "$target"
 }
 
 RESTORE_DIR=""
@@ -242,7 +242,7 @@ cmd_restore() {
 
   if [ -n "$restore_engine" ]; then
     msg_info "Executing restore engine..."
-    bash "$restore_engine" "$RESTORE_DIR"
+    exec /usr/bin/bash "$restore_engine" "$RESTORE_DIR"
   else
     msg_error "Invalid migration backup: restore.sh was not found."
     exit 1

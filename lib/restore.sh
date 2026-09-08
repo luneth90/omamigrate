@@ -148,16 +148,11 @@ cleanup_privileges() {
 }
 trap cleanup_privileges EXIT INT TERM
 
-# If not authenticated yet, prompt in terminal or read from stdin pipe in GUI/non-interactive mode
+# If in an interactive terminal and not authenticated yet, prompt ONCE
 if ! sudo -n true 2>/dev/null; then
   if [ -t 0 ]; then
     msg_info "Administrator privileges required to restore system configurations & packages."
     sudo -v || { msg_error "Administrator authentication failed."; exit 1; }
-  else
-    if IFS= read -r -t 1 -s SUDO_PASS; then
-      printf '%s\n' "$SUDO_PASS" | sudo -S -p "" -v 2>/dev/null || true
-      unset SUDO_PASS
-    fi
   fi
 fi
 

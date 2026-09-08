@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.4] - 2026-09-09
+
+### Security & Hardening
+- **Executable Identity & Absolute System Paths**: Enforce fixed absolute paths (`/usr/bin/python3`, `/usr/bin/sudo`, `/usr/bin/bash`) across all UI Process invocations and worker scripts. Eliminate PATH resolution vulnerability preventing user-session PATH spoofing and binary injection.
+- **Environment Sanitization**: Applied `clearEnvironment: true` and restricted `PATH="/usr/bin:/bin"` to all privileged and shell execution processes in `OmaMigrate.qml`, eliminating `LD_PRELOAD`, `SUDO_ASKPASS`, and environment variable injection vectors.
+- **Privilege Boundary Integrity Verification**: Implemented strict pre-execution integrity checks on `/usr/bin/sudo`, verifying root:root ownership (UID 0, GID 0), SetUID mode (`04755`), and preventing group/world-writable permissions before routing any credentials.
+- **Zero Credential Bytes to Mutable Plugin Workers**: Completely eliminated `exportSecret`, `restoreSecret`, and `pendingSecret` properties from UI processes. Stream credentials exclusively to the isolated `/usr/bin/sudo` privilege boundary in a dedicated session, redirecting standard input to `/dev/null` prior to launching user-space worker scripts. Mutable plugin scripts never receive credential bytes, preventing TOCTOU worker substitution attacks.
+- **PTY Session Privilege Isolation**: Utilized an authentic in-memory PTY session bridge for GUI execution. This allows Linux Sudoers under default `timestamp_type = tty` policies to establish valid terminal credentials and share them with non-interactive child workers (`pacman`, `yay`, `modprobe`) without piping raw secrets to user-side code.
+- **Regression Test Suite**: Added automated tests verifying PATH replacement immunity and worker substitution defense (proving neither fake PATH binaries nor replaced worker scripts can intercept credentials).
+
 ## [1.1.3] - 2026-09-08
 
 ### Fixed

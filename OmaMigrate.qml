@@ -54,12 +54,83 @@ Item {
   property bool authValidating: false
   property string pendingAction: "export" // "export" | "restore"
   property string lastExportedArchive: ""
-  property string pendingSecret: ""
-  property string exportSecret: ""
-  property string restoreSecret: ""
 
   readonly property string cliPath: String(Qt.resolvedUrl("bin/omamigrate")).replace("file://", "")
   readonly property string archiveScannerPath: String(Qt.resolvedUrl("lib/scan-archives.sh")).replace("file://", "")
+
+  readonly property string runnerPythonCode: `
+import os, sys, pty, stat, subprocess
+
+action = sys.argv[1] if len(sys.argv) > 1 else ""
+cli_path = sys.argv[2] if len(sys.argv) > 2 else ""
+extra_arg = sys.argv[3] if len(sys.argv) > 3 else ""
+
+sudo_path = os.environ.get("OMAMIGRATE_TEST_SUDO", "/usr/bin/sudo")
+try:
+    st = os.stat(sudo_path)
+    if sudo_path == "/usr/bin/sudo":
+        if st.st_uid != 0 or st.st_gid != 0 or not (st.st_mode & stat.S_ISUID) or (st.st_mode & 0o022):
+            print("SECURITY_VERIFY_FAILED", file=sys.stderr)
+            sys.exit(2)
+    elif not os.access(sudo_path, os.X_OK):
+        print("SECURITY_VERIFY_FAILED", file=sys.stderr)
+        sys.exit(2)
+except Exception:
+    print("SECURITY_VERIFY_FAILED", file=sys.stderr)
+    sys.exit(2)
+
+try:
+    raw_pass = sys.stdin.readline().strip()
+except Exception:
+    raw_pass = ""
+
+pid, fd = pty.fork()
+if pid == 0:
+    if raw_pass:
+        clean_env = {"PATH": "/usr/bin:/bin", "HOME": os.environ.get("HOME", "")}
+        p = subprocess.Popen(
+            [sudo_path, "-S", "-p", "", "-v"],
+            stdin=subprocess.PIPE,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
+            env=clean_env,
+            close_fds=True
+        )
+        p.communicate(input=raw_pass.encode("utf-8") + b"\n")
+        raw_pass = None
+        if p.returncode != 0:
+            print("AUTH_FAILED", file=sys.stderr)
+            os._exit(1)
+    raw_pass = None
+    devnull = os.open(os.devnull, os.O_RDONLY)
+    os.dup2(devnull, 0)
+    os.close(devnull)
+    if action == "backup":
+        cmd = 'OMAMIGRATE_FULL_AI=' + extra_arg + ' exec "' + cli_path + '" backup'
+        os.execl("/usr/bin/bash", "/usr/bin/bash", "-c", cmd)
+    elif action == "restore":
+        cmd = 'OMAMIGRATE_GUI=1 exec "' + cli_path + '" restore "$0"'
+        os.execl("/usr/bin/bash", "/usr/bin/bash", "-c", cmd, extra_arg)
+    else:
+        cmd = 'exec "' + cli_path + '" ' + action
+        os.execl("/usr/bin/bash", "/usr/bin/bash", "-c", cmd)
+else:
+    raw_pass = None
+    del raw_pass
+    while True:
+        try:
+            chunk = os.read(fd, 1024)
+            if not chunk:
+                break
+            sys.stdout.buffer.write(chunk)
+            sys.stdout.buffer.flush()
+        except OSError:
+            break
+    os.close(fd)
+    _, status = os.waitpid(pid, 0)
+    code = os.waitstatus_to_exitcode(status)
+    sys.exit(code)
+`
 
   function open(payloadJson) {
     root.opened = true
@@ -75,9 +146,8 @@ Item {
     root.opened = false
     root.showPasswordPrompt = false
     root.inputPassword = ""
-    root.pendingSecret = ""
-    root.exportSecret = ""
-    root.restoreSecret = ""
+    exportProcess.secretBuffer = ""
+    restoreProcess.secretBuffer = ""
     authProcess.secretBuffer = ""
     root.authError = ""
   }
@@ -90,9 +160,8 @@ Item {
     root.opened = false
     root.showPasswordPrompt = false
     root.inputPassword = ""
-    root.pendingSecret = ""
-    root.exportSecret = ""
-    root.restoreSecret = ""
+    exportProcess.secretBuffer = ""
+    restoreProcess.secretBuffer = ""
     authProcess.secretBuffer = ""
     root.authError = ""
     if (root.shell && typeof root.shell.hide === "function") {
@@ -128,9 +197,8 @@ Item {
     root.showPasswordPrompt = false
     root.lockWarningActive = false
     root.inputPassword = ""
-    root.pendingSecret = ""
-    root.exportSecret = ""
-    root.restoreSecret = ""
+    exportProcess.secretBuffer = ""
+    restoreProcess.secretBuffer = ""
     authProcess.secretBuffer = ""
     root.authError = ""
     root.opened = false
@@ -152,9 +220,8 @@ Item {
     root.isProcessing = false
     root.showPasswordPrompt = false
     root.inputPassword = ""
-    root.pendingSecret = ""
-    root.exportSecret = ""
-    root.restoreSecret = ""
+    exportProcess.secretBuffer = ""
+    restoreProcess.secretBuffer = ""
     authProcess.secretBuffer = ""
     root.authError = ""
     root.statusText = "Ready"
@@ -169,13 +236,14 @@ Item {
     root.isProcessing = true
     root.statusText = "Creating migration backup..."
     root.inputPassword = ""
-    root.pendingSecret = ""
-    authProcess.secretBuffer = ""
-    root.exportSecret = (secret !== undefined && secret !== null) ? String(secret) : ""
+    root.authError = ""
+    exportProcess.secretBuffer = (secret !== undefined && secret !== null) ? String(secret) : ""
     exportProcess.command = [
-      "bash", "-c",
-      "OMAMIGRATE_FULL_AI=" + (root.includeAiHistory ? "1" : "0") +
-      " exec \"" + root.cliPath + "\" backup\n"
+      "/usr/bin/python3", "-c", root.runnerPythonCode,
+      "backup",
+      root.cliPath,
+      root.includeAiHistory ? "1" : "0",
+      ""
     ]
     exportProcess.running = true
   }
@@ -189,14 +257,15 @@ Item {
     root.isProcessing = true
     root.statusText = "Restoring system..."
     root.inputPassword = ""
-    root.pendingSecret = ""
-    authProcess.secretBuffer = ""
-    root.restoreSecret = (secret !== undefined && secret !== null) ? String(secret) : ""
+    root.authError = ""
     var archive = root.selectedArchive
+    restoreProcess.secretBuffer = (secret !== undefined && secret !== null) ? String(secret) : ""
     restoreProcess.command = [
-      "bash", "-c",
-      "OMAMIGRATE_GUI=1 exec \"" + root.cliPath + "\" restore \"$0\"\n",
-      archive
+      "/usr/bin/python3", "-c", root.runnerPythonCode,
+      "restore",
+      root.cliPath,
+      archive,
+      ""
     ]
     restoreProcess.running = true
   }
@@ -221,10 +290,13 @@ Item {
     }
     root.authValidating = true
     root.authError = ""
-    authProcess.secretBuffer = root.inputPassword
-    root.pendingSecret = root.inputPassword
+    var pass = root.inputPassword
     root.inputPassword = ""
-    authProcess.running = true
+    if (root.pendingAction === "export") {
+      root.startExport(pass)
+    } else if (root.pendingAction === "restore") {
+      root.startRestore(pass)
+    }
   }
 
   PanelWindow {
@@ -635,12 +707,12 @@ Item {
                 onClicked: {
                   root.showPasswordPrompt = false
                   root.inputPassword = ""
-                  root.pendingSecret = ""
-                  root.exportSecret = ""
-                  root.restoreSecret = ""
+                  exportProcess.secretBuffer = ""
+                  restoreProcess.secretBuffer = ""
                   authProcess.secretBuffer = ""
                   root.authError = ""
                   root.isProcessing = false
+                  root.authValidating = false
                 }
               }
             }
@@ -1701,9 +1773,14 @@ Item {
 
   Process {
     id: checkExportAuthProcess
+    clearEnvironment: true
+    environment: {
+      "PATH": "/usr/bin:/bin",
+      "HOME": String(Quickshell.env("HOME") || "")
+    }
     command: [
-      "bash", "-c",
-      "if sudo -n true 2>/dev/null; then echo 'no'; elif find /etc/sing-box /etc/mihomo /etc/v2raya /etc/xray /etc/v2ray /etc/daed -maxdepth 2 ! -readable 2>/dev/null | grep -q .; then echo 'yes'; else echo 'no'; fi"
+      "/usr/bin/bash", "-c",
+      "if /usr/bin/sudo -n true 2>/dev/null; then echo 'no'; elif /usr/bin/find /etc/sing-box /etc/mihomo /etc/v2raya /etc/xray /etc/v2ray /etc/daed -maxdepth 2 ! -readable 2>/dev/null | /usr/bin/grep -q .; then echo 'yes'; else echo 'no'; fi"
     ]
     stdout: StdioCollector {
       id: exportAuthOutput
@@ -1723,9 +1800,14 @@ Item {
 
   Process {
     id: checkRestoreAuthProcess
+    clearEnvironment: true
+    environment: {
+      "PATH": "/usr/bin:/bin",
+      "HOME": String(Quickshell.env("HOME") || "")
+    }
     command: [
-      "bash", "-c",
-      "if sudo -n true 2>/dev/null; then echo 'no'; else echo 'yes'; fi"
+      "/usr/bin/bash", "-c",
+      "if /usr/bin/sudo -n true 2>/dev/null; then echo 'no'; else echo 'yes'; fi"
     ]
     stdout: StdioCollector {
       id: restoreAuthOutput
@@ -1745,7 +1827,9 @@ Item {
 
   Process {
     id: authProcess
-    command: ["sudo", "-S", "-p", "", "-v"]
+    clearEnvironment: true
+    environment: { "PATH": "/usr/bin:/bin" }
+    command: ["/usr/bin/sudo", "-S", "-p", "", "-v"]
     stdinEnabled: true
     property string secretBuffer: ""
     onStarted: {
@@ -1758,32 +1842,27 @@ Item {
       root.authValidating = false
       secretBuffer = ""
       root.inputPassword = ""
-      if (code === 0) {
-        root.showPasswordPrompt = false
-        root.authError = ""
-        var secret = root.pendingSecret
-        root.pendingSecret = ""
-        if (root.pendingAction === "export") {
-          root.startExport(secret)
-        } else if (root.pendingAction === "restore") {
-          root.startRestore(secret)
-        }
-      } else {
-        root.pendingSecret = ""
-        root.authError = "Incorrect password. Please try again."
-        passwordInput.selectAll()
-        passwordInput.forceActiveFocus()
-      }
     }
   }
 
   Process {
     id: exportProcess
+    clearEnvironment: true
+    environment: {
+      "PATH": "/usr/bin:/bin",
+      "HOME": String(Quickshell.env("HOME") || ""),
+      "USER": String(Quickshell.env("USER") || ""),
+      "XDG_RUNTIME_DIR": String(Quickshell.env("XDG_RUNTIME_DIR") || ""),
+      "XDG_CACHE_HOME": String(Quickshell.env("XDG_CACHE_HOME") || "")
+    }
     stdinEnabled: true
+    property string secretBuffer: ""
     onStarted: {
-      if (root.exportSecret.length > 0) {
-        exportProcess.write(root.exportSecret + "\n")
-        root.exportSecret = ""
+      if (secretBuffer.length > 0) {
+        exportProcess.write(secretBuffer + "\n")
+        secretBuffer = ""
+      } else {
+        exportProcess.write("\n")
       }
     }
     stdout: SplitParser {
@@ -1802,14 +1881,23 @@ Item {
       onRead: function(line) {
         var clean = String(line).replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "").trim()
         if (clean.length > 0) {
-          root.statusText = clean
+          if (clean.indexOf("AUTH_FAILED") !== -1) {
+            root.authError = "Incorrect password. Please try again."
+          } else if (clean.indexOf("SECURITY_VERIFY_FAILED") !== -1) {
+            root.authError = "Security integrity check failed for /usr/bin/sudo."
+          } else {
+            root.statusText = clean
+          }
         }
       }
     }
     onExited: function(code) {
       root.isProcessing = false
-      root.exportSecret = ""
+      root.authValidating = false
+      secretBuffer = ""
       if (code === 0) {
+        root.showPasswordPrompt = false
+        root.authError = ""
         root.exportStep = 2
         if (root.lastExportedArchive) {
           var displayPath = root.lastExportedArchive.replace(/\/home\/[^\/]+/, "~")
@@ -1818,6 +1906,14 @@ Item {
           root.statusText = "Migration backup created successfully."
         }
         root.scanArchives()
+      } else if (root.authError.length > 0 || (code === 1 && !root.lastExportedArchive && root.statusText === "Creating migration backup...")) {
+        if (!root.authError) {
+          root.authError = "Incorrect password. Please try again."
+        }
+        root.showPasswordPrompt = true
+        root.exportStep = 1
+        passwordInput.selectAll()
+        passwordInput.forceActiveFocus()
       } else {
         root.exportStep = 4
         if (!root.statusText || root.statusText === "Creating migration backup...") {
@@ -1831,7 +1927,7 @@ Item {
   Process {
     id: sendProcess
     command: [
-      "bash", "-c",
+      "/usr/bin/bash", "-c",
       "ARCHIVE=\"$0\"\n" +
       "if [ -n \"$ARCHIVE\" ] && [ -f \"$ARCHIVE\" ]; then\n" +
       "  \"" + root.cliPath + "\" send \"$ARCHIVE\"\n" +
@@ -1846,14 +1942,24 @@ Item {
     }
   }
 
-
   Process {
     id: restoreProcess
+    clearEnvironment: true
+    environment: {
+      "PATH": "/usr/bin:/bin",
+      "HOME": String(Quickshell.env("HOME") || ""),
+      "USER": String(Quickshell.env("USER") || ""),
+      "XDG_RUNTIME_DIR": String(Quickshell.env("XDG_RUNTIME_DIR") || ""),
+      "XDG_CACHE_HOME": String(Quickshell.env("XDG_CACHE_HOME") || "")
+    }
     stdinEnabled: true
+    property string secretBuffer: ""
     onStarted: {
-      if (root.restoreSecret.length > 0) {
-        restoreProcess.write(root.restoreSecret + "\n")
-        root.restoreSecret = ""
+      if (secretBuffer.length > 0) {
+        restoreProcess.write(secretBuffer + "\n")
+        secretBuffer = ""
+      } else {
+        restoreProcess.write("\n")
       }
     }
     stdout: SplitParser {
@@ -1868,16 +1974,33 @@ Item {
       onRead: function(line) {
         var clean = String(line).replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "").trim()
         if (clean.length > 0) {
-          root.statusText = clean
+          if (clean.indexOf("AUTH_FAILED") !== -1) {
+            root.authError = "Incorrect password. Please try again."
+          } else if (clean.indexOf("SECURITY_VERIFY_FAILED") !== -1) {
+            root.authError = "Security integrity check failed for /usr/bin/sudo."
+          } else {
+            root.statusText = clean
+          }
         }
       }
     }
     onExited: function(code) {
       root.isProcessing = false
-      root.restoreSecret = ""
+      root.authValidating = false
+      secretBuffer = ""
       if (code === 0) {
+        root.showPasswordPrompt = false
+        root.authError = ""
         root.restoreStep = 2
         root.statusText = "Restoration completed successfully!"
+      } else if (root.authError.length > 0 || (code === 1 && (root.statusText === "Restoring system..." || root.statusText === "Restoration in progress..."))) {
+        if (!root.authError) {
+          root.authError = "Incorrect password. Please try again."
+        }
+        root.showPasswordPrompt = true
+        root.restoreStep = 1
+        passwordInput.selectAll()
+        passwordInput.forceActiveFocus()
       } else {
         root.restoreStep = 3
         if (!root.statusText || root.statusText === "Restoration in progress..." || root.statusText === "Restoring system...") {
@@ -1889,6 +2012,6 @@ Item {
 
   Process {
     id: reloadProcess
-    command: ["bash", "-c", "hyprctl reload && omarchy restart shell"]
+    command: ["/usr/bin/bash", "-c", "hyprctl reload && omarchy restart shell"]
   }
 }
