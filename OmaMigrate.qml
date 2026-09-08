@@ -409,8 +409,8 @@ Item {
 
           // Placeholder reserving space for the top-right force close button
           Item {
-            width: 28
-            height: 28
+            Layout.preferredWidth: 28
+            Layout.preferredHeight: 28
           }
         }
 

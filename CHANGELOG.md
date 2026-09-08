@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2026-09-08
+
+### Fixed
+- **Restore Engine Hang & Yay Infinite Loop**: Removed `--sudoloop` from the `yay` AUR package installation routine in `lib/restore.sh`. Yay's upstream `--sudoloop` enters an unthrottled infinite retry loop when `sudo -v` fails in non-terminal environments (`sudo: a terminal is required to read the password`). Restore routines already maintain their own background keepalive loop, rendering yay's `--sudoloop` redundant.
+- **Fail-Fast AUR Package Installation**: Added `--sudoflags "-n"` and standard input redirection (`< /dev/null`) to `yay`, ensuring package manager elevation operates strictly non-interactively and fails fast without blocking or looping when terminal input is unavailable.
+- **Archive Extraction Input Guard**: Redirected standard input to `/dev/null` during `tar` archive extraction in `bin/omamigrate` to guarantee stdin credentials stream cleanly to the restore engine without premature consumption.
+
+### Added
+- **Top-Right Force Close Button**: Added an independent `✕` close button in the top-right corner of the OmaMigrate modal card (`z: 1000`), positioned above the processing shield. Users can now forcibly terminate active background processes (backup, restore, authorization, or scanning) and immediately close the window with a mouse click at any time.
+
 ## [1.1.2] - 2026-09-08
 
 ### Fixed
