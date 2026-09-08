@@ -141,30 +141,12 @@ if [ "$AI_HISTORY_REQUESTED" = true ]; then
 fi
 
 # Sudo Privilege Initialization: Authenticate ONCE and keep alive
-SUDO_ASKPASS_SCRIPT=""
 SUDO_PID=""
 
 cleanup_privileges() {
   [ -n "${SUDO_PID:-}" ] && kill "${SUDO_PID}" 2>/dev/null || true
-  [ -n "${SUDO_ASKPASS_SCRIPT:-}" ] && rm -f "${SUDO_ASKPASS_SCRIPT}" 2>/dev/null || true
 }
 trap cleanup_privileges EXIT INT TERM
-
-# If password provided by OmaMigrate GUI, configure credentials and transient askpass helper
-if [ -n "${OMAMIGRATE_SUDO_PASS:-}" ]; then
-  echo "$OMAMIGRATE_SUDO_PASS" | sudo -S -p "" -v 2>/dev/null || true
-  
-  ASKPASS_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/omamigrate"
-  mkdir -p "$ASKPASS_DIR" && chmod 700 "$ASKPASS_DIR"
-  SUDO_ASKPASS_SCRIPT="$(mktemp "${ASKPASS_DIR}/askpass-XXXXXX.sh")"
-  cat << EOF > "$SUDO_ASKPASS_SCRIPT"
-#!/usr/bin/env bash
-echo "$OMAMIGRATE_SUDO_PASS"
-EOF
-  chmod 700 "$SUDO_ASKPASS_SCRIPT"
-  export SUDO_ASKPASS="$SUDO_ASKPASS_SCRIPT"
-  unset OMAMIGRATE_SUDO_PASS
-fi
 
 # If in an interactive terminal and not authenticated yet, prompt ONCE
 if ! sudo -n true 2>/dev/null; then

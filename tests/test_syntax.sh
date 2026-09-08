@@ -30,6 +30,9 @@ echo "==> Testing restore two-run convergence..."
 echo "==> Testing AI session snapshots and path adaptation..."
 "${ROOT_DIR}/tests/test_ai_state.sh"
 
+echo "==> Testing credential isolation & zero secret leakage in process argv/environ..."
+"${ROOT_DIR}/tests/test_credential_isolation.sh"
+
 echo "==> Checking executables..."
 test -x "${ROOT_DIR}/bin/omamigrate"
 test -x "${ROOT_DIR}/lib/export.sh"
@@ -37,6 +40,7 @@ test -x "${ROOT_DIR}/lib/restore.sh"
 test -x "${ROOT_DIR}/lib/ai-state.sh"
 test -x "${ROOT_DIR}/lib/scan-archives.sh"
 test -x "${ROOT_DIR}/tests/test_ai_state.sh"
+test -x "${ROOT_DIR}/tests/test_credential_isolation.sh"
 
 echo "==> Testing archive discovery..."
 TEST_HOME="$(mktemp -d)"

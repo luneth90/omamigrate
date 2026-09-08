@@ -10,7 +10,7 @@ LIB_DIR="$(cd "${BIN_DIR}/../lib" && pwd)"
 source "${LIB_DIR}/core.sh"
 source "${LIB_DIR}/ai-state.sh"
 
-VERSION="1.1.0"
+VERSION="1.1.1"
 
 show_help() {
   cat << HELP_TXT

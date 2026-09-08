@@ -50,7 +50,6 @@ Item {
   // In-interface password prompt state
   property bool showPasswordPrompt: false
   property string inputPassword: ""
-  property string savedPassword: ""
   property string authError: ""
   property bool authValidating: false
   property string pendingAction: "export" // "export" | "restore"
@@ -73,7 +72,7 @@ Item {
     root.opened = false
     root.showPasswordPrompt = false
     root.inputPassword = ""
-    root.savedPassword = ""
+    authProcess.secretBuffer = ""
     root.authError = ""
   }
 
@@ -85,7 +84,7 @@ Item {
     root.opened = false
     root.showPasswordPrompt = false
     root.inputPassword = ""
-    root.savedPassword = ""
+    authProcess.secretBuffer = ""
     root.authError = ""
     if (root.shell && typeof root.shell.hide === "function") {
       root.shell.hide("luneth90.omamigrate")
@@ -104,7 +103,7 @@ Item {
     root.isProcessing = false
     root.showPasswordPrompt = false
     root.inputPassword = ""
-    root.savedPassword = ""
+    authProcess.secretBuffer = ""
     root.authError = ""
     root.statusText = "Ready"
     root.selectedArchive = ""
@@ -117,16 +116,12 @@ Item {
     root.lastExportedArchive = ""
     root.isProcessing = true
     root.statusText = "Creating migration backup..."
-    var pass = root.savedPassword || root.inputPassword
-    root.savedPassword = ""
     root.inputPassword = ""
+    authProcess.secretBuffer = ""
     exportProcess.command = [
       "bash", "-c",
-      "PASS=\"$0\"\n" +
-      "if [ -n \"$PASS\" ]; then echo \"$PASS\" | sudo -S -p \"\" -v 2>/dev/null || true; fi\n" +
       "OMAMIGRATE_FULL_AI=" + (root.includeAiHistory ? "1" : "0") +
-      " OMAMIGRATE_SUDO_PASS=\"$PASS\" \"" + root.cliPath + "\" backup\n",
-      pass
+      " \"" + root.cliPath + "\" backup\n"
     ]
     exportProcess.running = true
   }
@@ -139,16 +134,13 @@ Item {
     root.showPasswordPrompt = false
     root.isProcessing = true
     root.statusText = "Restoring system..."
-    var pass = root.savedPassword || root.inputPassword
-    root.savedPassword = ""
     root.inputPassword = ""
+    authProcess.secretBuffer = ""
     var archive = root.selectedArchive
     restoreProcess.command = [
       "bash", "-c",
-      "PASS=\"$0\"\n" +
-      "if [ -n \"$PASS\" ]; then echo \"$PASS\" | sudo -S -p \"\" -v 2>/dev/null || true; fi\n" +
-      "OMAMIGRATE_GUI=1 OMAMIGRATE_SUDO_PASS=\"$PASS\" \"" + root.cliPath + "\" restore \"$1\"\n",
-      pass, archive
+      "OMAMIGRATE_GUI=1 \"" + root.cliPath + "\" restore \"$0\"\n",
+      archive
     ]
     restoreProcess.running = true
   }
@@ -173,7 +165,8 @@ Item {
     }
     root.authValidating = true
     root.authError = ""
-    authProcess.command = ["bash", "-c", "echo \"$0\" | sudo -S -p \"\" -v", root.inputPassword]
+    authProcess.secretBuffer = root.inputPassword
+    root.inputPassword = ""
     authProcess.running = true
   }
 
@@ -575,6 +568,7 @@ Item {
                 onClicked: {
                   root.showPasswordPrompt = false
                   root.inputPassword = ""
+                  authProcess.secretBuffer = ""
                   root.authError = ""
                   root.isProcessing = false
                 }
@@ -1681,11 +1675,20 @@ Item {
 
   Process {
     id: authProcess
+    command: ["sudo", "-S", "-p", "", "-v"]
+    stdinEnabled: true
+    property string secretBuffer: ""
+    onStarted: {
+      if (secretBuffer.length > 0) {
+        authProcess.write(secretBuffer + "\n")
+        secretBuffer = ""
+      }
+    }
     onExited: function(code) {
       root.authValidating = false
+      secretBuffer = ""
+      root.inputPassword = ""
       if (code === 0) {
-        root.savedPassword = root.inputPassword
-        root.inputPassword = ""
         root.showPasswordPrompt = false
         root.authError = ""
         if (root.pendingAction === "export") {
