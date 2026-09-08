@@ -31,11 +31,6 @@ rm -rf "${STAGING_BASE}/export-"* 2>/dev/null || true
 BACKUP_DIR="$(mktemp -d "${STAGING_BASE}/export-XXXXXX")"
 trap 'rm -rf "${BACKUP_DIR:-}"' EXIT INT TERM
 
-# Initialize sudo credential cache if password provided by OmaMigrate GUI
-if [ -n "${OMAMIGRATE_SUDO_PASS:-}" ]; then
-  echo "$OMAMIGRATE_SUDO_PASS" | sudo -S -p "" -v 2>/dev/null || true
-  unset OMAMIGRATE_SUDO_PASS
-fi
 
 msg_info "Creating OmaMigrate migration backup..."
 msg_step "Creating staging directory: ${BACKUP_DIR}"

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "luneth90.omamigrate",
   "name": "OmaMigrate",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "author": "luneth90",
   "license": "MIT",
   "description": "Portable Omarchy migration backups for apps, AI credentials, proxy services, system configurations, and automated workflows.",

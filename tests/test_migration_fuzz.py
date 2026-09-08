@@ -209,6 +209,15 @@ class TestRestoreContract(unittest.TestCase):
         self.assertIn("TMP_SHELL_JSON", self.restore)
         self.assertIn("luneth90.omamigrate", self.restore)
 
+    def test_credential_isolation_contract(self):
+        self.assertNotIn("OMAMIGRATE_SUDO_PASS", self.qml)
+        self.assertNotIn("OMAMIGRATE_SUDO_PASS", self.export)
+        self.assertNotIn("OMAMIGRATE_SUDO_PASS", self.restore)
+        self.assertNotIn("savedPassword", self.qml)
+        self.assertIn("stdinEnabled: true", self.qml)
+        self.assertNotIn("SUDO_ASKPASS_SCRIPT", self.restore)
+        self.assertNotIn("askpass-", self.restore)
+
 
 if __name__ == "__main__":
     unittest.main()

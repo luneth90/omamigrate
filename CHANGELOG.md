@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-09-08
+
+### Security & Hardening
+- **Process Credential Isolation**: Eliminate password exposure in process command-line metadata (`argv`) and environment variables (`OMAMIGRATE_SUDO_PASS`).
+- **Direct Stdin Authentication Streaming**: Stream authentication password directly to `sudo -S -p "" -v` via standard input pipe using Quickshell `stdinEnabled` without invoking intermediate shell arguments, immediately purging memory buffers upon transmission.
+- **Sudo Credential Cache Re-use**: Execute backup and restore routines strictly against the active sudo credential cache (`sudo -n`), with background keepalive loops and automatic lifecycle cleanup on process exit.
+- **Zero Disk Artifacts**: Remove transient `askpass` script generation in restore routines, guaranteeing no sensitive credentials ever touch the filesystem.
+- **Automated Process-Level Inspection Test**: Added `tests/test_credential_isolation.sh` to dynamically inspect spawned processes, verifying that canary secrets are strictly absent from `/proc/*/cmdline` and `/proc/*/environ`.
+
 ## [1.1.0] - 2026-09-06
 
 ### Added
