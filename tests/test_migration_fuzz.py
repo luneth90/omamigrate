@@ -235,6 +235,12 @@ class TestRestoreContract(unittest.TestCase):
         compile(runner_code, "<runner_test>", "exec")
         self.assertNotIn("SUDO_ASKPASS_SCRIPT", self.restore)
         self.assertNotIn("askpass-", self.restore)
+        self.assertIn("OMAMIGRATE_PROTECTED_SYS_TAR", self.export)
+        self.assertIn("OMAMIGRATE_RESTORE_PHASE", self.restore)
+        self.assertIn("ALLOWED_PREFIXES", runner_code)
+        self.assertIn("ALLOWED_SERVICES", runner_code)
+        self.assertIn("stdin=subprocess.DEVNULL", runner_code)
+        self.assertIn("-k", runner_code)
 
     def test_force_close_button_contract(self):
         self.assertIn("id: forceCloseBtn", self.qml)

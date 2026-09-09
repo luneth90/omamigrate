@@ -115,10 +115,20 @@ if [[ "${1:-}" == "-S" ]]; then
   fi
 fi
 
-# Simulate sudo -n true / sudo -n -v
+# Simulate sudo -k (kill/revoke cached timestamp)
+if [[ "${1:-}" == "-k" ]]; then
+  echo "TIMESTAMP_REVOKED" >> "$LOG_FILE"
+  rm -f "${TEST_DIR:-/tmp}/sudo_timestamp"
+  exit 0
+fi
+
+# Simulate sudo -n true / sudo -n -v / sudo -n id
 if [[ "${1:-}" == "-n" ]]; then
   if [[ -f "${TEST_DIR:-/tmp}/sudo_timestamp" ]]; then
     echo "TIMESTAMP_CACHE_VALID" >> "$LOG_FILE"
+    if [[ "${2:-}" == "id" ]]; then
+      echo "uid=0(root) gid=0(root) groups=0(root)"
+    fi
     exit 0
   else
     echo "TIMESTAMP_CACHE_EXPIRED" >> "$LOG_FILE"
@@ -326,20 +336,30 @@ with open('${RUNNER_SCRIPT}', 'w') as out:
     out.write(m.group(1))
 "
 
-# Regression Test 1: Worker Substitution Attack Defense (Zero Credential Bytes)
-echo "  Testing Worker Substitution: worker receives zero credential bytes on stdin..."
+# Regression Test 1: Worker Substitution Attack Defense (Zero Credential Bytes & Zero Privilege Capability Leak)
+echo "  Testing Worker Substitution in backup: worker receives zero credentials & zero sudo capability..."
 WORKER_LOG="${TEST_DIR}/worker_received.log"
 cat << EOF > "${TEST_DIR}/mock_worker.sh"
 #!/usr/bin/env bash
+WORKER_LOG="${TEST_DIR}/worker_received.log"
+# 1. Attempt to read leaked credentials from stdin
 read -r -t 1 worker_stdin || worker_stdin=""
-echo "WORKER_RECEIVED_BYTES:\${#worker_stdin}" > "${WORKER_LOG}"
-echo "WORKER_STDIN:\${worker_stdin}" >> "${WORKER_LOG}"
+echo "WORKER_RECEIVED_BYTES:\${#worker_stdin}" >> "\${WORKER_LOG}"
+echo "WORKER_STDIN:\${worker_stdin}" >> "\${WORKER_LOG}"
+
+# 2. Adversarial attack attempt: try to abuse inherited sudo capability
+if "\${OMAMIGRATE_TEST_SUDO:-sudo}" -n id 2>/dev/null | grep -q "uid=0"; then
+  echo "EXPLOIT_SUDO_CAPABILITY_ABUSED: Worker gained root access!" >> "\${WORKER_LOG}"
+  exit 99
+fi
+echo "WORKER_SUDO_CAPABILITY_CHECK:PASSED" >> "\${WORKER_LOG}"
 exit 0
 EOF
 chmod 755 "${TEST_DIR}/mock_worker.sh"
 
 > "${TEST_MOCK_LOG}"
 > /tmp/sudo_mock.log
+> "${WORKER_LOG}"
 rm -f "${TEST_DIR}/sudo_timestamp"
 printf '%s\n' "${CANARY_SECRET}" | OMAMIGRATE_TEST_SUDO="${MOCK_BIN}/sudo" python3 "${RUNNER_SCRIPT}" "backup" "${TEST_DIR}/mock_worker.sh" "0"
 
@@ -348,12 +368,56 @@ if ! grep -q "STDIN_CANARY_VERIFIED_SAFELY" "${TEST_MOCK_LOG}" 2>/dev/null && ! 
   exit 1
 fi
 
+if ! grep -q "TIMESTAMP_REVOKED" "${TEST_MOCK_LOG}" 2>/dev/null && ! grep -q "TIMESTAMP_REVOKED" /tmp/sudo_mock.log 2>/dev/null; then
+  echo "FAIL: Sudo timestamp was not immediately revoked via sudo -k!" >&2
+  exit 1
+fi
+
 if ! grep -q "WORKER_RECEIVED_BYTES:0" "${WORKER_LOG}"; then
   echo "FAIL: Worker received non-zero credential bytes on stdin!" >&2
   cat "${WORKER_LOG}" >&2
   exit 1
 fi
-echo "  -> Verified: worker script received 0 credential bytes (stdin disconnected to /dev/null)."
+
+if grep -q "EXPLOIT_SUDO_CAPABILITY_ABUSED" "${WORKER_LOG}"; then
+  echo "FAIL: Worker was able to consume sudo capability!" >&2
+  cat "${WORKER_LOG}" >&2
+  exit 1
+fi
+
+if ! grep -q "WORKER_SUDO_CAPABILITY_CHECK:PASSED" "${WORKER_LOG}"; then
+  echo "FAIL: Worker sudo capability check failed!" >&2
+  cat "${WORKER_LOG}" >&2
+  exit 1
+fi
+echo "  -> Verified: backup worker script received 0 credential bytes and 0 sudo capability."
+
+# Test Restore Worker Capability Isolation
+echo "  Testing Worker Substitution in restore: worker receives zero credentials & zero sudo capability..."
+> "${TEST_MOCK_LOG}"
+> /tmp/sudo_mock.log
+> "${WORKER_LOG}"
+rm -f "${TEST_DIR}/sudo_timestamp"
+printf '%s\n' "${CANARY_SECRET}" | OMAMIGRATE_TEST_SUDO="${MOCK_BIN}/sudo" python3 "${RUNNER_SCRIPT}" "restore" "${TEST_DIR}/mock_worker.sh" "${TEST_DIR}/dummy.tar.gz"
+
+if ! grep -q "WORKER_RECEIVED_BYTES:0" "${WORKER_LOG}"; then
+  echo "FAIL: Restore worker received non-zero credential bytes on stdin!" >&2
+  cat "${WORKER_LOG}" >&2
+  exit 1
+fi
+
+if grep -q "EXPLOIT_SUDO_CAPABILITY_ABUSED" "${WORKER_LOG}"; then
+  echo "FAIL: Restore worker was able to consume sudo capability!" >&2
+  cat "${WORKER_LOG}" >&2
+  exit 1
+fi
+
+if ! grep -q "WORKER_SUDO_CAPABILITY_CHECK:PASSED" "${WORKER_LOG}"; then
+  echo "FAIL: Restore worker sudo capability check failed!" >&2
+  cat "${WORKER_LOG}" >&2
+  exit 1
+fi
+echo "  -> Verified: restore worker script received 0 credential bytes and 0 sudo capability."
 
 # Regression Test 2: PATH Substitution Attack Defense
 echo "  Testing PATH substitution hijacking resistance..."
