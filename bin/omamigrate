@@ -10,7 +10,7 @@ LIB_DIR="$(cd "${BIN_DIR}/../lib" && pwd)"
 source "${LIB_DIR}/core.sh"
 source "${LIB_DIR}/ai-state.sh"
 
-VERSION="1.1.4"
+VERSION="1.1.5"
 
 show_help() {
   cat << HELP_TXT
@@ -204,7 +204,7 @@ cmd_restore() {
   fi
 
   # In interactive CLI mode, authenticate sudo ONCE at the start and keep it alive
-  if [ -t 0 ] && ! sudo -n true 2>/dev/null; then
+  if [ "${OMAMIGRATE_RESTORE_PHASE:-}" != "user" ] && [ -t 0 ] && ! sudo -n true 2>/dev/null; then
     msg_info "Administrator privileges required to restore system configurations & packages."
     sudo -v || { msg_error "Administrator authentication failed."; exit 1; }
   fi
@@ -216,12 +216,14 @@ cmd_restore() {
 
   RESTORE_DIR="$(mktemp -d "${staging_base}/restore-XXXXXX")"
 
-  if sudo -n true 2>/dev/null; then
-    ( while true; do sudo -n -v 2>/dev/null; sleep 15; kill -0 "$$" 2>/dev/null || exit; done ) &
-    SUDO_PID=$!
-    trap 'kill "${SUDO_PID:-}" 2>/dev/null || true; rm -rf "${RESTORE_DIR:-}"' EXIT INT TERM
-  else
-    trap 'rm -rf "${RESTORE_DIR:-}"' EXIT INT TERM
+  if [ "${OMAMIGRATE_RESTORE_PHASE:-}" != "user" ]; then
+    if sudo -n true 2>/dev/null; then
+      ( while true; do sudo -n -v 2>/dev/null; sleep 15; kill -0 "$$" 2>/dev/null || exit; done ) &
+      SUDO_PID=$!
+      trap 'kill "${SUDO_PID:-}" 2>/dev/null || true; rm -rf "${RESTORE_DIR:-}"' EXIT INT TERM
+    else
+      trap 'rm -rf "${RESTORE_DIR:-}"' EXIT INT TERM
+    fi
   fi
 
   msg_info "Opening migration backup: $(basename "$archive")"

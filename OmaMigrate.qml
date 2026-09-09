@@ -59,7 +59,7 @@ Item {
   readonly property string archiveScannerPath: String(Qt.resolvedUrl("lib/scan-archives.sh")).replace("file://", "")
 
   readonly property string runnerPythonCode: `
-import os, sys, pty, stat, subprocess
+import os, sys, stat, subprocess, tempfile, shutil
 
 action = sys.argv[1] if len(sys.argv) > 1 else ""
 cli_path = sys.argv[2] if len(sys.argv) > 2 else ""
@@ -84,52 +84,259 @@ try:
 except Exception:
     raw_pass = ""
 
-pid, fd = pty.fork()
-if pid == 0:
-    if raw_pass:
-        clean_env = {"PATH": "/usr/bin:/bin", "HOME": os.environ.get("HOME", "")}
-        p = subprocess.Popen(
-            [sudo_path, "-S", "-p", "", "-v"],
-            stdin=subprocess.PIPE,
-            stdout=sys.stdout,
-            stderr=sys.stderr,
-            env=clean_env,
-            close_fds=True
-        )
-        p.communicate(input=raw_pass.encode("utf-8") + bytes([10]))
-        raw_pass = None
-        if p.returncode != 0:
-            print("AUTH_FAILED", file=sys.stderr)
-            os._exit(1)
-    raw_pass = None
-    devnull = os.open(os.devnull, os.O_RDONLY)
-    os.dup2(devnull, 0)
-    os.close(devnull)
-    if action == "backup":
-        cmd = 'OMAMIGRATE_FULL_AI="$1" exec "$0" backup'
-        os.execl("/usr/bin/bash", "/usr/bin/bash", "-c", cmd, cli_path, extra_arg)
-    elif action == "restore":
-        cmd = 'OMAMIGRATE_GUI=1 exec "$0" restore "$1"'
-        os.execl("/usr/bin/bash", "/usr/bin/bash", "-c", cmd, cli_path, extra_arg)
-    else:
-        cmd = 'exec "$0" "$1"'
-        os.execl("/usr/bin/bash", "/usr/bin/bash", "-c", cmd, cli_path, action)
-else:
+clean_env = {"PATH": "/usr/bin:/bin", "HOME": os.environ.get("HOME", "")}
+
+if action == "backup":
+    ALLOWLIST = [
+        "etc/sing-box",
+        "etc/mihomo",
+        "etc/v2raya",
+        "etc/xray",
+        "etc/v2ray",
+        "etc/daed"
+    ]
+    unreadable = []
+    for rel in ALLOWLIST:
+        target = "/" + rel
+        if os.path.exists(target):
+            try:
+                if not os.access(target, os.R_OK):
+                    unreadable.append(rel)
+                elif os.path.isdir(target):
+                    if not os.access(target, os.X_OK):
+                        unreadable.append(rel)
+                    else:
+                        for r, dirs, files in os.walk(target):
+                            for d in dirs:
+                                if not os.access(os.path.join(r, d), os.R_OK | os.X_OK):
+                                    unreadable.append(rel)
+                                    break
+                            for f in files:
+                                if not os.access(os.path.join(r, f), os.R_OK):
+                                    unreadable.append(rel)
+                                    break
+                            if rel in unreadable:
+                                break
+            except Exception:
+                unreadable.append(rel)
+
+    staging_tar = ""
+    if unreadable or raw_pass:
+        if unreadable:
+            staging_base = os.path.expanduser("~/.cache/omamigrate")
+            os.makedirs(staging_base, mode=0o700, exist_ok=True)
+            staging_tar = os.path.join(staging_base, "staging-sys-" + str(os.getpid()) + ".tar")
+            tar_cmd = [sudo_path, "-S", "-p", "", "/usr/bin/tar", "-C", "/", "-cf", staging_tar] + unreadable
+            p = subprocess.Popen(tar_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=clean_env, close_fds=True)
+            out, err = p.communicate(input=raw_pass.encode("utf-8") + bytes([10]))
+            if p.returncode != 0:
+                if os.path.exists(staging_tar):
+                    try:
+                        os.remove(staging_tar)
+                    except Exception:
+                        pass
+                subprocess.run([sudo_path, "-k"], env=clean_env, capture_output=True)
+                print("AUTH_FAILED", file=sys.stderr)
+                sys.exit(1)
+            try:
+                os.chmod(staging_tar, 0o600)
+            except Exception:
+                pass
+        else:
+            p = subprocess.Popen([sudo_path, "-S", "-p", "", "-v"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=clean_env, close_fds=True)
+            p.communicate(input=raw_pass.encode("utf-8") + bytes([10]))
+            if p.returncode != 0:
+                subprocess.run([sudo_path, "-k"], env=clean_env, capture_output=True)
+                print("AUTH_FAILED", file=sys.stderr)
+                sys.exit(1)
+
+        subprocess.run([sudo_path, "-k"], env=clean_env, capture_output=True)
+
     raw_pass = None
     del raw_pass
-    while True:
+
+    worker_env = dict(os.environ)
+    worker_env["OMAMIGRATE_FULL_AI"] = extra_arg
+    if staging_tar and os.path.exists(staging_tar):
+        worker_env["OMAMIGRATE_PROTECTED_SYS_TAR"] = staging_tar
+
+    cmd = "exec " + chr(34) + "$0" + chr(34) + " backup"
+    p_worker = subprocess.Popen(
+        ["/usr/bin/bash", "-c", cmd, cli_path],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        env=worker_env,
+        close_fds=True
+    )
+    for line in iter(p_worker.stdout.readline, b""):
+        sys.stdout.buffer.write(line)
+        sys.stdout.buffer.flush()
+    p_worker.wait()
+    if staging_tar and os.path.exists(staging_tar):
         try:
-            chunk = os.read(fd, 1024)
-            if not chunk:
-                break
-            sys.stdout.buffer.write(chunk)
-            sys.stdout.buffer.flush()
-        except OSError:
-            break
-    os.close(fd)
-    _, status = os.waitpid(pid, 0)
-    code = os.waitstatus_to_exitcode(status)
-    sys.exit(code)
+            os.remove(staging_tar)
+        except Exception:
+            pass
+    sys.exit(p_worker.returncode)
+
+elif action == "restore":
+    archive_path = extra_arg
+    if raw_pass:
+        p = subprocess.Popen([sudo_path, "-S", "-p", "", "-v"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=clean_env, close_fds=True)
+        p.communicate(input=raw_pass.encode("utf-8") + bytes([10]))
+        if p.returncode != 0:
+            subprocess.run([sudo_path, "-k"], env=clean_env, capture_output=True)
+            print("AUTH_FAILED", file=sys.stderr)
+            sys.exit(1)
+        subprocess.run([sudo_path, "-k"], env=clean_env, capture_output=True)
+
+    worker_env = dict(os.environ)
+    worker_env["OMAMIGRATE_GUI"] = "1"
+    worker_env["OMAMIGRATE_RESTORE_PHASE"] = "user"
+    cmd = "exec " + chr(34) + "$0" + chr(34) + " restore " + chr(34) + "$1" + chr(34)
+    p_worker = subprocess.Popen(
+        ["/usr/bin/bash", "-c", cmd, cli_path, archive_path],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        env=worker_env,
+        close_fds=True
+    )
+
+    stage_ready_dir = ""
+    for line in iter(p_worker.stdout.readline, b""):
+        sys.stdout.buffer.write(line)
+        sys.stdout.buffer.flush()
+        text = line.decode("utf-8", errors="replace").strip()
+        if text.startswith("OMAMIGRATE_STAGE_READY:"):
+            stage_ready_dir = text.split(":", 1)[1].strip()
+
+    p_worker.wait()
+    if p_worker.returncode != 0:
+        if stage_ready_dir and os.path.exists(stage_ready_dir):
+            shutil.rmtree(stage_ready_dir, ignore_errors=True)
+        raw_pass = None
+        sys.exit(p_worker.returncode)
+
+    if stage_ready_dir and os.path.exists(stage_ready_dir):
+        try:
+            ALLOWED_PREFIXES = (
+                "etc/sing-box",
+                "etc/mihomo",
+                "etc/v2raya",
+                "etc/xray",
+                "etc/v2ray",
+                "etc/daed",
+                "etc/systemd/system/sing-box.service",
+                "etc/systemd/system/sing-box-node-rotate.service",
+                "etc/systemd/system/sing-box-node-rotate.timer",
+                "etc/systemd/system/mihomo.service",
+                "etc/systemd/system/v2raya.service",
+                "etc/systemd/system/xray.service",
+                "etc/systemd/system/v2ray.service",
+                "etc/systemd/system/daed.service",
+                "etc/systemd/system/daed-next.service",
+                "etc/proxychains.conf",
+                "usr/local/bin/sing-box-node-rotate"
+            )
+
+            if raw_pass:
+                p_auth = subprocess.Popen([sudo_path, "-S", "-p", "", "-v"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=clean_env, close_fds=True)
+                p_auth.communicate(input=raw_pass.encode("utf-8") + bytes([10]))
+                if p_auth.returncode != 0:
+                    print("AUTH_FAILED", file=sys.stderr)
+                    sys.exit(1)
+
+            def run_privileged(args):
+                return subprocess.run([sudo_path, "-n"] + args, env=clean_env, capture_output=True)
+
+            pkg_file = os.path.join(stage_ready_dir, "pkg_meta", "missing_native_pkgs.txt")
+            if os.path.exists(pkg_file):
+                with open(pkg_file, "r") as f:
+                    pkgs = [line.strip() for line in f if line.strip()]
+                valid_pkgs = [p for p in pkgs if all(c.isalnum() or c in "_@.+-" for c in p) and not p.startswith("-")]
+                if valid_pkgs:
+                    print("==> Installing " + str(len(valid_pkgs)) + " system package(s)...")
+                    sys.stdout.flush()
+                    run_privileged(["/usr/bin/pacman", "-Syu", "--needed", "--noconfirm"] + valid_pkgs)
+
+            sys_root = os.path.join(stage_ready_dir, "system_root")
+            if os.path.exists(sys_root):
+                deploy_items = []
+                for root, dirs, files in os.walk(sys_root):
+                    for f in files:
+                        full = os.path.join(root, f)
+                        rel = os.path.relpath(full, sys_root)
+                        if any(rel == p or rel.startswith(p + "/") for p in ALLOWED_PREFIXES):
+                            deploy_items.append(rel)
+                if deploy_items:
+                    print("==> Deploying system configurations...")
+                    sys.stdout.flush()
+                    tar_proc = subprocess.Popen(
+                        ["/usr/bin/tar", "-C", sys_root, "-cf", "-"] + deploy_items,
+                        stdout=subprocess.PIPE,
+                        env=clean_env
+                    )
+                    sudo_tar = subprocess.Popen(
+                        [sudo_path, "-n", "/usr/bin/tar", "-C", "/", "--no-same-owner", "--no-overwrite-dir", "-xpf", "-"],
+                        stdin=tar_proc.stdout,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        env=clean_env
+                    )
+                    tar_proc.stdout.close()
+                    sudo_tar.communicate()
+
+                if os.path.exists(os.path.join(sys_root, "etc/sing-box")):
+                    run_privileged(["/usr/bin/chown", "-R", "root:sing-box", "/etc/sing-box"])
+                    run_privileged(["/usr/bin/chmod", "-R", "u=rwX,g=rX,o=", "/etc/sing-box"])
+                    user_name = os.environ.get("USER", "")
+                    if user_name:
+                        run_privileged(["/usr/bin/usermod", "-aG", "sing-box", user_name])
+                if os.path.exists(os.path.join(sys_root, "usr/local/bin/sing-box-node-rotate")):
+                    run_privileged(["/usr/bin/chown", "root:root", "/usr/local/bin/sing-box-node-rotate"])
+                    run_privileged(["/usr/bin/chmod", "755", "/usr/local/bin/sing-box-node-rotate"])
+
+            tun_marker = os.path.join(stage_ready_dir, "pkg_meta", "sing_box_tun.req")
+            if os.path.exists(tun_marker):
+                run_privileged(["/usr/bin/modprobe", "tun"])
+                mod_conf = "/etc/modules-load.d/99-omamigrate-sing-box-tun.conf"
+                p_tun = subprocess.Popen([sudo_path, "-n", "/usr/bin/tee", mod_conf], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, env=clean_env)
+                p_tun.communicate(input=b"tun" + bytes([10]))
+                run_privileged(["/usr/bin/chmod", "644", mod_conf])
+
+            run_privileged(["/usr/bin/systemctl", "daemon-reload"])
+            ALLOWED_SERVICES = [
+                "sing-box.service",
+                "sing-box-node-rotate.timer",
+                "mihomo.service",
+                "v2raya.service",
+                "xray.service",
+                "v2ray.service",
+                "daed.service",
+                "daed-next.service"
+            ]
+            for srv in ALLOWED_SERVICES:
+                unit_file = os.path.join(sys_root, "etc/systemd/system", srv)
+                if os.path.exists(unit_file):
+                    run_privileged(["/usr/bin/systemctl", "enable", srv])
+                    run_privileged(["/usr/bin/systemctl", "restart", srv])
+
+            print("Restoration completed successfully!")
+            sys.stdout.flush()
+        finally:
+            subprocess.run([sudo_path, "-k"], env=clean_env, capture_output=True)
+            raw_pass = None
+            del raw_pass
+            if stage_ready_dir and os.path.exists(stage_ready_dir):
+                shutil.rmtree(stage_ready_dir, ignore_errors=True)
+
+else:
+    cmd = "exec " + chr(34) + "$0" + chr(34) + " " + chr(34) + "$1" + chr(34)
+    p = subprocess.Popen(["/usr/bin/bash", "-c", cmd, cli_path, action], stdin=subprocess.DEVNULL, close_fds=True)
+    p.wait()
+    sys.exit(p.returncode)
 `
 
   function open(payloadJson) {

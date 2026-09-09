@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.5] - 2026-09-09
+
+### Security & Hardening
+- **Two-Phase Privilege Separation Architecture**: Decoupled mutable user-space worker scripts from all privileged system operations. User-space workers (`export.sh` and `restore.sh`) execute in completely unprivileged environments with standard input bound to `/dev/null` and zero ambient sudo credentials.
+- **Strict In-Memory Privileged Helper**: Implemented an in-memory, integrity- and ownership-bound runner in `OmaMigrate.qml` with a narrow operation and argument allowlist. Privileged operations are strictly restricted to allowlisted targets (`/etc/sing-box`, `/etc/mihomo`, `/etc/v2raya`, `/etc/xray`, `/etc/v2ray`, `/etc/daed`, `/etc/proxychains.conf`, `/usr/local/bin/sing-box-node-rotate`, and systemd service units).
+- **Package Name Sanitization**: Enforce strict character allowlists (`^[a-zA-Z0-9_@.+-]+$`) on all package restoration operations, preventing option injection or argument smuggling into `/usr/bin/pacman`.
+- **Immediate Credential Revocation (`sudo -k`)**: Guaranteed immediate sudo ticket revocation via `sudo -k` after every privileged operation in both backup and restore flows. Sudo tickets are never left active across process boundaries, completely preventing rogue worker processes or same-UID processes from consuming reusable sudo timestamps.
+- **Adversarial Privilege Capability Regression Tests**: Added adversarial tests in `tests/test_credential_isolation.sh` demonstrating that substituting a worker script with a malicious payload attempting `sudo -n id` strictly fails with zero capability leakage.
+
 ## [1.1.4] - 2026-09-09
 
 ### Security & Hardening

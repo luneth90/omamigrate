@@ -32,7 +32,7 @@ BACKUP_DIR="$(mktemp -d "${STAGING_BASE}/export-XXXXXX")"
 trap 'rm -rf "${BACKUP_DIR:-}"' EXIT INT TERM
 
 # Privilege Elevation Initialization: Validate active sudo credential cache
-if ! sudo -n true 2>/dev/null; then
+if [ -z "${OMAMIGRATE_PROTECTED_SYS_TAR:-}" ] && ! sudo -n true 2>/dev/null; then
   if [ -t 0 ]; then
     sudo -v 2>/dev/null || true
   fi
@@ -373,6 +373,16 @@ for path in "${readable_paths[@]}"; do
     cp -p "$path" "${BACKUP_DIR}/system_root${path}" 2>/dev/null || true
   fi
 done
+
+# If protected system staging tar is provided by privileged helper, extract it directly
+if [ -n "${OMAMIGRATE_PROTECTED_SYS_TAR:-}" ] && [ -f "${OMAMIGRATE_PROTECTED_SYS_TAR}" ]; then
+  msg_step "Extracting protected system configs from staging archive..."
+  if tar -C "${BACKUP_DIR}/system_root" -xf "${OMAMIGRATE_PROTECTED_SYS_TAR}" 2>/dev/null; then
+    msg_ok "Protected system configs integrated."
+    rm -f "${OMAMIGRATE_PROTECTED_SYS_TAR}"
+    unreadable_paths=()
+  fi
+fi
 
 # If any protected system paths require elevation, do it ONCE via Polkit (pkexec) or sudo
 if [ "${#unreadable_paths[@]}" -gt 0 ]; then
