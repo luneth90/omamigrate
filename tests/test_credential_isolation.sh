@@ -117,6 +117,9 @@ if [[ "${1:-}" == "-S" ]]; then
     if [[ "$1" == "-p" ]]; then
       shift 2
       continue
+    elif [[ "$1" == "--" ]]; then
+      shift
+      continue
     fi
     break
   done
@@ -129,15 +132,26 @@ if [[ "${1:-}" == "-S" ]]; then
     shift
     while [[ $# -gt 0 ]]; do
       if [[ "$1" == "-cf" ]]; then
-        target_arg="${2:-}"
+        shift
+        target_arg="${1:-}"
         if [[ "$target_arg" == "-" ]]; then
-          echo "TAR_STREAM_STDOUT_VERIFIED" >> "$LOG_FILE"
-          tar -cf - --files-from=/dev/null
-          exit 0
-        else
-          echo "EXPLOIT_TAR_REOPENED_PATH: $target_arg" >> "$LOG_FILE"
-          exit 5
+          shift
+          if [[ "${1:-}" == "--" ]]; then
+            shift
+            # Verify that none of the operands are unallowlisted or options
+            for op in "$@"; do
+              if [[ "$op" == *"/shadow"* || "$op" == "--"* ]]; then
+                echo "EXPLOIT_BYPASS_OPERAND_DETECTED: $op" >> "$LOG_FILE"
+                exit 6
+              fi
+            done
+            echo "TAR_STREAM_STDOUT_VERIFIED" >> "$LOG_FILE"
+            tar -cf - --files-from=/dev/null
+            exit 0
+          fi
         fi
+        echo "EXPLOIT_TAR_REOPENED_PATH: $target_arg" >> "$LOG_FILE"
+        exit 5
       fi
       shift
     done
@@ -363,8 +377,12 @@ with open('${ROOT_DIR}/OmaMigrate.qml') as f:
 m = re.search(r'readonly property string runnerPythonCode:\s*\x60([^\x60]+)\x60', c)
 if not m:
     raise RuntimeError('Could not extract runnerPythonCode from OmaMigrate.qml')
+code = m.group(1)
+# Adapt sudo_path to MOCK_BIN/sudo exclusively for mock environment
+code = code.replace('sudo_path = \"/usr/bin/sudo\"', 'sudo_path = \"${MOCK_BIN}/sudo\"')
+code = code.replace('st.st_uid != 0 or st.st_gid != 0 or not (st.st_mode & stat.S_ISUID) or (st.st_mode & 0o022)', 'not os.access(sudo_path, os.X_OK)')
 with open('${RUNNER_SCRIPT}', 'w') as out:
-    out.write(m.group(1))
+    out.write(code)
 "
 
 # Regression Test 1: Worker Substitution Attack Defense (Zero Credential Bytes & Zero Privilege Capability Leak)
@@ -379,7 +397,7 @@ echo "WORKER_RECEIVED_BYTES:\${#worker_stdin}" >> "\${WORKER_LOG}"
 echo "WORKER_STDIN:\${worker_stdin}" >> "\${WORKER_LOG}"
 
 # 2. Adversarial attack attempt: try to abuse inherited sudo capability
-if "\${OMAMIGRATE_TEST_SUDO:-sudo}" -n id 2>/dev/null | grep -q "uid=0"; then
+if "${MOCK_BIN}/sudo" -n id 2>/dev/null | grep -q "uid=0"; then
   echo "EXPLOIT_SUDO_CAPABILITY_ABUSED: Worker gained root access!" >> "\${WORKER_LOG}"
   exit 99
 fi
@@ -392,7 +410,7 @@ chmod 755 "${TEST_DIR}/mock_worker.sh"
 > /tmp/sudo_mock.log
 > "${WORKER_LOG}"
 rm -f "${TEST_DIR}/sudo_timestamp"
-printf '%s\n' "${CANARY_SECRET}" | OMAMIGRATE_TEST_SUDO="${MOCK_BIN}/sudo" python3 "${RUNNER_SCRIPT}" "backup" "${TEST_DIR}/mock_worker.sh" "0"
+printf '%s\n' "${CANARY_SECRET}" | python3 "${RUNNER_SCRIPT}" "backup" "${TEST_DIR}/mock_worker.sh" "0"
 
 if ! grep -q "STDIN_CANARY_VERIFIED_SAFELY" "${TEST_MOCK_LOG}" 2>/dev/null && ! grep -q "STDIN_CANARY_VERIFIED_SAFELY" /tmp/sudo_mock.log 2>/dev/null; then
   echo "FAIL: Sudo did not receive canary password during runner execution" >&2
@@ -429,7 +447,7 @@ echo "  Testing Worker Substitution in restore: worker receives zero credentials
 > /tmp/sudo_mock.log
 > "${WORKER_LOG}"
 rm -f "${TEST_DIR}/sudo_timestamp"
-printf '%s\n' "${CANARY_SECRET}" | OMAMIGRATE_TEST_SUDO="${MOCK_BIN}/sudo" python3 "${RUNNER_SCRIPT}" "restore" "${TEST_DIR}/mock_worker.sh" "${TEST_DIR}/dummy.tar.gz"
+printf '%s\n' "${CANARY_SECRET}" | python3 "${RUNNER_SCRIPT}" "restore" "${TEST_DIR}/mock_worker.sh" "${TEST_DIR}/dummy.tar.gz"
 
 if ! grep -q "WORKER_RECEIVED_BYTES:0" "${WORKER_LOG}"; then
   echo "FAIL: Restore worker received non-zero credential bytes on stdin!" >&2
@@ -474,7 +492,7 @@ chmod 755 "${POISON_DIR}/bash"
   # Executing via system bash should never invoke poisoned binaries in PATH
   /usr/bin/bash "${ROOT_DIR}/bin/omamigrate" status >/dev/null 2>&1 || true
   # Runner execution with clean_env should never invoke poisoned binaries in PATH
-  printf 'test\n' | OMAMIGRATE_TEST_SUDO="${MOCK_BIN}/sudo" python3 "${RUNNER_SCRIPT}" "backup" "${TEST_DIR}/mock_worker.sh" "0" >/dev/null 2>&1 || true
+  printf 'test\n' | python3 "${RUNNER_SCRIPT}" "backup" "${TEST_DIR}/mock_worker.sh" "0" >/dev/null 2>&1 || true
 )
 
 if [ -f "${TEST_DIR}/poison_exec.log" ]; then
@@ -487,8 +505,14 @@ echo "  -> Verified: absolute system paths prevent PATH hijacking."
 # Regression Test 3: Sudo SetUID Integrity Verification
 echo "  Testing sudo integrity enforcement..."
 STATUS_CODE=0
-printf 'test\n' | OMAMIGRATE_TEST_VERIFY=1 OMAMIGRATE_TEST_SUDO="${POISON_DIR}/sudo" \
-  python3 "${RUNNER_SCRIPT}" "backup" "/bin/true" "0" >/dev/null 2>&1 || STATUS_CODE=$?
+python3 -c "
+import re
+with open('${ROOT_DIR}/OmaMigrate.qml') as f:
+    c = f.read()
+m = re.search(r'readonly property string runnerPythonCode:\s*\x60([^\x60]+)\x60', c)
+code = m.group(1).replace('sudo_path = \"/usr/bin/sudo\"', 'sudo_path = \"${POISON_DIR}/sudo\"')
+exec(code)
+" "backup" "/bin/true" "0" >/dev/null 2>&1 || STATUS_CODE=$?
 
 if [ "${STATUS_CODE}" -ne 2 ]; then
   echo "FAIL: Runner did not reject invalid sudo binary (expected exit code 2, got ${STATUS_CODE})" >&2
@@ -512,15 +536,25 @@ ln -snf "${CANARY_ROOT_TARGET}" "${STAGING_BASE}/staging-sys-predictable.tar"
 ln -snf "${CANARY_ROOT_TARGET}" "${STAGING_BASE}/staging-sys-$$.tar"
 
 # Test 4a: Privileged tar invocation MUST NEVER accept a destination file path argument
+# and privileged operands MUST be derived strictly from ALLOWLIST with -- terminator
 > "${TEST_MOCK_LOG}"
 > /tmp/sudo_mock.log
 rm -f "${TEST_DIR}/sudo_timestamp"
 
+# Create a test runner simulating detected unreadable allowlist items and attempting unallowlisted injection
+RUNNER_STAGING_TEST="${TEST_DIR}/runner_staging_test.py"
+python3 -c "
+with open('${RUNNER_SCRIPT}') as f:
+    c = f.read()
+# Inject 'etc/sing-box' (allowlisted) and attempt to inject 'etc/shadow' and '--checkpoint=1' (bypass attempts)
+c = c.replace('unreadable = []', 'unreadable = [\"etc/sing-box\", \"etc/shadow\", \"--checkpoint=1\"]')
+with open('${RUNNER_STAGING_TEST}', 'w') as out:
+    out.write(c)
+"
+
 printf '%s\n' "${CANARY_SECRET}" | \
   HOME="${TEST_DIR}" \
-  OMAMIGRATE_TEST_SUDO="${MOCK_BIN}/sudo" \
-  OMAMIGRATE_TEST_UNREADABLE="etc/sing-box" \
-  python3 "${RUNNER_SCRIPT}" "backup" "${TEST_DIR}/mock_worker.sh" "0"
+  python3 "${RUNNER_STAGING_TEST}" "backup" "${TEST_DIR}/mock_worker.sh" "0"
 
 # Check if canary target remained intact
 if [[ "$(cat "${CANARY_ROOT_TARGET}")" != "CONFIDENTIAL_ROOT_CANARY_DO_NOT_TRUNCATE_12345" ]]; then
@@ -528,19 +562,25 @@ if [[ "$(cat "${CANARY_ROOT_TARGET}")" != "CONFIDENTIAL_ROOT_CANARY_DO_NOT_TRUNC
   exit 1
 fi
 
-# Check mock sudo log: verify tar was NEVER invoked with an archive file path
+# Check mock sudo log: verify tar was NEVER invoked with an archive file path or unallowlisted bypass operands
 if grep -q "EXPLOIT_TAR_REOPENED_PATH" "${TEST_MOCK_LOG}" 2>/dev/null || grep -q "EXPLOIT_TAR_REOPENED_PATH" /tmp/sudo_mock.log 2>/dev/null; then
-  echo "FAIL: Privileged process attempted to reopen user-controlled pathname!" >&2
+  echo "FAIL: Privileged process attempted to reopen user-controlled pathname or missed -- separator!" >&2
+  cat "${TEST_MOCK_LOG}" /tmp/sudo_mock.log >&2
+  exit 1
+fi
+
+if grep -q "EXPLOIT_BYPASS_OPERAND_DETECTED" "${TEST_MOCK_LOG}" 2>/dev/null || grep -q "EXPLOIT_BYPASS_OPERAND_DETECTED" /tmp/sudo_mock.log 2>/dev/null; then
+  echo "FAIL: Allowlist bypass operand was passed to privileged tar!" >&2
   cat "${TEST_MOCK_LOG}" /tmp/sudo_mock.log >&2
   exit 1
 fi
 
 if ! grep -q "TAR_STREAM_STDOUT_VERIFIED" "${TEST_MOCK_LOG}" 2>/dev/null && ! grep -q "TAR_STREAM_STDOUT_VERIFIED" /tmp/sudo_mock.log 2>/dev/null; then
-  echo "FAIL: Sudo tar was not invoked with stdout stream (-cf -)!" >&2
+  echo "FAIL: Sudo tar was not invoked with stdout stream and -- terminator!" >&2
   cat "${TEST_MOCK_LOG}" /tmp/sudo_mock.log >&2
   exit 1
 fi
-echo "  -> Verified: root tar never opened user pathname; streamed via stdout descriptor."
+echo "  -> Verified: root tar never opened user pathname; operands derived strictly from allowlist with -- terminator."
 
 # Test 4b: Direct symlink collision rejection with O_NOFOLLOW|O_EXCL
 echo "  Testing O_NOFOLLOW|O_EXCL descriptor collision rejection..."
