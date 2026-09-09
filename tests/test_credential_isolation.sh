@@ -102,17 +102,48 @@ if env | grep -q "$CANARY"; then
   exit 3
 fi
 
-# Simulate sudo -S -p "" -v (read password from stdin)
+# Simulate sudo -S (read password from stdin, handle -v or tar)
 if [[ "${1:-}" == "-S" ]]; then
   read -r input_pass
-  if [[ "$input_pass" == "$CANARY" ]]; then
-    echo "STDIN_CANARY_VERIFIED_SAFELY" >> "$LOG_FILE"
-    touch "${TEST_DIR:-/tmp}/sudo_timestamp"
-    exit 0
-  else
+  if [[ "$input_pass" != "$CANARY" ]]; then
     echo "STDIN_CANARY_MISMATCH" >> "$LOG_FILE"
     exit 1
   fi
+  echo "STDIN_CANARY_VERIFIED_SAFELY" >> "$LOG_FILE"
+  touch "${TEST_DIR:-/tmp}/sudo_timestamp"
+
+  shift # remove -S
+  while [[ $# -gt 0 ]]; do
+    if [[ "$1" == "-p" ]]; then
+      shift 2
+      continue
+    fi
+    break
+  done
+
+  if [[ "${1:-}" == "-v" ]]; then
+    exit 0
+  fi
+
+  if [[ "${1:-}" == *"/tar" || "${1:-}" == "tar" ]]; then
+    shift
+    while [[ $# -gt 0 ]]; do
+      if [[ "$1" == "-cf" ]]; then
+        target_arg="${2:-}"
+        if [[ "$target_arg" == "-" ]]; then
+          echo "TAR_STREAM_STDOUT_VERIFIED" >> "$LOG_FILE"
+          tar -cf - --files-from=/dev/null
+          exit 0
+        else
+          echo "EXPLOIT_TAR_REOPENED_PATH: $target_arg" >> "$LOG_FILE"
+          exit 5
+        fi
+      fi
+      shift
+    done
+    exit 0
+  fi
+  exit 0
 fi
 
 # Simulate sudo -k (kill/revoke cached timestamp)
@@ -464,6 +495,75 @@ if [ "${STATUS_CODE}" -ne 2 ]; then
   exit 1
 fi
 echo "  -> Verified: non-setuid or rogue sudo binaries are strictly rejected."
+
+# Regression Test 4: Symlink Traversal, Descriptor Collision & Stream Defense
+echo "==> [Credential Isolation] 5. Regression Test: Symlink Traversal & Race Defense..."
+echo "  Testing staging archive creation against symlink attack & pathname reopening..."
+
+CANARY_ROOT_TARGET="${TEST_DIR}/sensitive_root_target"
+echo "CONFIDENTIAL_ROOT_CANARY_DO_NOT_TRUNCATE_12345" > "${CANARY_ROOT_TARGET}"
+
+STAGING_BASE="${TEST_DIR}/.cache/omamigrate"
+mkdir -p "${STAGING_BASE}"
+chmod 700 "${STAGING_BASE}"
+
+# Pre-create malicious symlinks targeting the sensitive root file
+ln -snf "${CANARY_ROOT_TARGET}" "${STAGING_BASE}/staging-sys-predictable.tar"
+ln -snf "${CANARY_ROOT_TARGET}" "${STAGING_BASE}/staging-sys-$$.tar"
+
+# Test 4a: Privileged tar invocation MUST NEVER accept a destination file path argument
+> "${TEST_MOCK_LOG}"
+> /tmp/sudo_mock.log
+rm -f "${TEST_DIR}/sudo_timestamp"
+
+printf '%s\n' "${CANARY_SECRET}" | \
+  HOME="${TEST_DIR}" \
+  OMAMIGRATE_TEST_SUDO="${MOCK_BIN}/sudo" \
+  OMAMIGRATE_TEST_UNREADABLE="etc/sing-box" \
+  python3 "${RUNNER_SCRIPT}" "backup" "${TEST_DIR}/mock_worker.sh" "0"
+
+# Check if canary target remained intact
+if [[ "$(cat "${CANARY_ROOT_TARGET}")" != "CONFIDENTIAL_ROOT_CANARY_DO_NOT_TRUNCATE_12345" ]]; then
+  echo "FAIL: Sensitive target file was modified or truncated!" >&2
+  exit 1
+fi
+
+# Check mock sudo log: verify tar was NEVER invoked with an archive file path
+if grep -q "EXPLOIT_TAR_REOPENED_PATH" "${TEST_MOCK_LOG}" 2>/dev/null || grep -q "EXPLOIT_TAR_REOPENED_PATH" /tmp/sudo_mock.log 2>/dev/null; then
+  echo "FAIL: Privileged process attempted to reopen user-controlled pathname!" >&2
+  cat "${TEST_MOCK_LOG}" /tmp/sudo_mock.log >&2
+  exit 1
+fi
+
+if ! grep -q "TAR_STREAM_STDOUT_VERIFIED" "${TEST_MOCK_LOG}" 2>/dev/null && ! grep -q "TAR_STREAM_STDOUT_VERIFIED" /tmp/sudo_mock.log 2>/dev/null; then
+  echo "FAIL: Sudo tar was not invoked with stdout stream (-cf -)!" >&2
+  cat "${TEST_MOCK_LOG}" /tmp/sudo_mock.log >&2
+  exit 1
+fi
+echo "  -> Verified: root tar never opened user pathname; streamed via stdout descriptor."
+
+# Test 4b: Direct symlink collision rejection with O_NOFOLLOW|O_EXCL
+echo "  Testing O_NOFOLLOW|O_EXCL descriptor collision rejection..."
+COLLISION_PATH="${STAGING_BASE}/staging-sys-collision.tar"
+ln -snf "${CANARY_ROOT_TARGET}" "${COLLISION_PATH}"
+
+python3 -c "
+import os, sys
+flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, 'O_NOFOLLOW', 0)
+try:
+    fd = os.open('${COLLISION_PATH}', flags, 0o600)
+    print('FAIL: Symlink was opened despite O_NOFOLLOW|O_EXCL!', file=sys.stderr)
+    os.close(fd)
+    sys.exit(1)
+except (FileExistsError, OSError) as e:
+    sys.exit(0)
+"
+
+if [[ "$(cat "${CANARY_ROOT_TARGET}")" != "CONFIDENTIAL_ROOT_CANARY_DO_NOT_TRUNCATE_12345" ]]; then
+  echo "FAIL: Sensitive target file was truncated during collision test!" >&2
+  exit 1
+fi
+echo "  -> Verified: O_NOFOLLOW|O_EXCL descriptor strictly rejects pre-created symlinks."
 
 rm -f /tmp/canary_expected.txt /tmp/sudo_mock.log
 rm -rf "${TEST_DIR}"

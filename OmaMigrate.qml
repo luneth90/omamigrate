@@ -59,7 +59,7 @@ Item {
   readonly property string archiveScannerPath: String(Qt.resolvedUrl("lib/scan-archives.sh")).replace("file://", "")
 
   readonly property string runnerPythonCode: `
-import os, sys, stat, subprocess, tempfile, shutil
+import os, sys, stat, subprocess, tempfile, shutil, threading, secrets
 
 action = sys.argv[1] if len(sys.argv) > 1 else ""
 cli_path = sys.argv[2] if len(sys.argv) > 2 else ""
@@ -120,17 +120,63 @@ if action == "backup":
             except Exception:
                 unreadable.append(rel)
 
+    test_unreadable = os.environ.get("OMAMIGRATE_TEST_UNREADABLE", "")
+    if test_unreadable and test_unreadable not in unreadable:
+        unreadable.append(test_unreadable)
+
     staging_tar = ""
     if unreadable or raw_pass:
         if unreadable:
             staging_base = os.path.expanduser("~/.cache/omamigrate")
             os.makedirs(staging_base, mode=0o700, exist_ok=True)
-            staging_tar = os.path.join(staging_base, "staging-sys-" + str(os.getpid()) + ".tar")
-            tar_cmd = [sudo_path, "-S", "-p", "", "/usr/bin/tar", "-C", "/", "-cf", staging_tar] + unreadable
+            try:
+                os.chmod(staging_base, 0o700)
+            except Exception:
+                pass
+            rand_token = secrets.token_hex(16)
+            staging_tar = os.path.join(staging_base, "staging-sys-" + rand_token + ".tar")
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+            try:
+                staging_fd = os.open(staging_tar, flags, 0o600)
+            except Exception:
+                subprocess.run([sudo_path, "-k"], env=clean_env, capture_output=True)
+                print("SECURITY_STAGING_FAILED", file=sys.stderr)
+                sys.exit(1)
+
+            tar_cmd = [sudo_path, "-S", "-p", "", "/usr/bin/tar", "-C", "/", "-cf", "-"] + unreadable
             p = subprocess.Popen(tar_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=clean_env, close_fds=True)
-            out, err = p.communicate(input=raw_pass.encode("utf-8") + bytes([10]))
+
+            stderr_chunks = []
+            def read_stderr():
+                while True:
+                    data = p.stderr.read(65536)
+                    if not data:
+                        break
+                    stderr_chunks.append(data)
+
+            t_err = threading.Thread(target=read_stderr)
+            t_err.start()
+
+            try:
+                try:
+                    p.stdin.write(raw_pass.encode("utf-8") + bytes([10]))
+                    p.stdin.flush()
+                    p.stdin.close()
+                except (BrokenPipeError, OSError):
+                    pass
+                while True:
+                    chunk = p.stdout.read(65536)
+                    if not chunk:
+                        break
+                    os.write(staging_fd, chunk)
+            finally:
+                os.close(staging_fd)
+
+            t_err.join()
+            p.wait()
+
             if p.returncode != 0:
-                if os.path.exists(staging_tar):
+                if os.path.exists(staging_tar) or os.path.islink(staging_tar):
                     try:
                         os.remove(staging_tar)
                     except Exception:
@@ -173,7 +219,7 @@ if action == "backup":
         sys.stdout.buffer.write(line)
         sys.stdout.buffer.flush()
     p_worker.wait()
-    if staging_tar and os.path.exists(staging_tar):
+    if staging_tar and (os.path.exists(staging_tar) or os.path.islink(staging_tar)):
         try:
             os.remove(staging_tar)
         except Exception:
@@ -267,6 +313,10 @@ elif action == "restore":
                 for root, dirs, files in os.walk(sys_root):
                     for f in files:
                         full = os.path.join(root, f)
+                        if os.path.islink(full):
+                            link_dest = os.readlink(full)
+                            if link_dest.startswith("/") or ".." in link_dest.split("/"):
+                                continue
                         rel = os.path.relpath(full, sys_root)
                         if any(rel == p or rel.startswith(p + "/") for p in ALLOWED_PREFIXES):
                             deploy_items.append(rel)

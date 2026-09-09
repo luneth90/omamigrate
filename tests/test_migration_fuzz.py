@@ -241,6 +241,11 @@ class TestRestoreContract(unittest.TestCase):
         self.assertIn("ALLOWED_SERVICES", runner_code)
         self.assertIn("stdin=subprocess.DEVNULL", runner_code)
         self.assertIn("-k", runner_code)
+        self.assertIn("O_NOFOLLOW", runner_code)
+        self.assertIn("O_EXCL", runner_code)
+        self.assertIn("secrets.token_hex", runner_code)
+        self.assertIn('"-cf", "-"', runner_code)
+        self.assertIn("threading.Thread", runner_code)
 
     def test_force_close_button_contract(self):
         self.assertIn("id: forceCloseBtn", self.qml)

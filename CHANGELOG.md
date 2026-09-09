@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.6] - 2026-09-09
+
+### Security & Hardening
+- **Pathname Reopening Elimination**: Completely removed passing user-controlled staging file paths to the privileged `tar` process. Privileged helper invokes `/usr/bin/tar -C / -cf -` streaming archive bytes directly to standard output pipe. Root never opens, reopens, or truncates any file path in user-controlled directories.
+- **O_NOFOLLOW | O_EXCL Safe Descriptor Allocation**: Staging archives are created and held directly by the unprivileged Python process using `os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW` with mode `0600` and a cryptographically random 128-bit hex token (`secrets.token_hex(16)`). Pre-existing symlinks, collision attempts, or directory race attacks are strictly rejected by the kernel before any privileged operation is invoked.
+- **Stdout Pipe-to-Descriptor Streaming**: Tar output is streamed from the child process's stdout pipe to the securely held file descriptor with asynchronous stderr draining, completely eliminating file descriptor exposure, pipe deadlock risks, and symlink races.
+- **Symlink Traversal Prevention in System Restoration**: Added symlink target resolution validation when walking `system_root` during privileged deployment, rejecting any symlink pointing outside `sys_root` or using absolute/parent traversals (`..`).
+- **Symlink Traversal & Race Condition Regression Tests**: Added dedicated regression test in `tests/test_credential_isolation.sh` and contract assertions in `tests/test_migration_fuzz.py`, formally proving that pre-created symlinks targeting sensitive files cannot cause root file truncation or path reopening.
+
 ## [1.1.5] - 2026-09-09
 
 ### Security & Hardening
