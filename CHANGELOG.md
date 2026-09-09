@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.7] - 2026-09-09
+
+### Security & Hardening
+- **Prohibit Ambient Test Hooks (`OMAMIGRATE_TEST_*`)**: Completely eliminated all `OMAMIGRATE_TEST_*` environment variable overrides (`OMAMIGRATE_TEST_SUDO`, `OMAMIGRATE_TEST_VERIFY`, `OMAMIGRATE_TEST_UNREADABLE`) from production code. `sudo_path` is strictly hardcoded to `/usr/bin/sudo` with mandatory SetUID root validation, and test hooks cannot be manipulated from user space.
+- **Strict Immutable Allowlist Operand Derivation**: Privileged `tar` backup operands are strictly derived from an immutable `ALLOWLIST` tuple (`unreadable_operands = [item for item in unreadable if item in ALLOWLIST and not item.startswith("-") and ".." not in item]`). Ambient or user-supplied paths can never bypass the allowlist.
+- **Mandatory Option Terminators (`--`)**: Inserted `--` option terminators across all privileged binary invocations (`sudo`, `tar`, `pacman`, `systemctl`, `chown`, `chmod`, `usermod`, `modprobe`, `tee`). This strictly prevents operand-to-flag option injection attacks even if malicious filenames or package names are encountered.
+- **Relative Path Option Injection Defense**: During system restoration, relative paths extracted from `system_root` starting with `-` or containing `..` path traversals are strictly rejected before being passed to `tar`.
+- **Zero Test Variable Regression Enforcement**: Added strict test assertions in `tests/test_migration_fuzz.py` to ensure production QML, backup, and restore scripts contain zero `OMAMIGRATE_TEST_` occurrences, and updated `tests/test_credential_isolation.sh` with active allowlist bypass tests.
+
 ## [1.1.6] - 2026-09-09
 
 ### Security & Hardening

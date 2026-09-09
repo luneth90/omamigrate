@@ -246,6 +246,12 @@ class TestRestoreContract(unittest.TestCase):
         self.assertIn("secrets.token_hex", runner_code)
         self.assertIn('"-cf", "-"', runner_code)
         self.assertIn("threading.Thread", runner_code)
+        self.assertNotIn("OMAMIGRATE_TEST_", self.qml, "Production QML code must contain zero OMAMIGRATE_TEST_ variables")
+        self.assertNotIn("OMAMIGRATE_TEST_", self.export, "Export script must contain zero OMAMIGRATE_TEST_ variables")
+        self.assertNotIn("OMAMIGRATE_TEST_", self.restore, "Restore script must contain zero OMAMIGRATE_TEST_ variables")
+        self.assertIn('"--"', runner_code)
+        self.assertIn("unreadable_operands", runner_code)
+        self.assertIn("ALLOWLIST", runner_code)
 
     def test_force_close_button_contract(self):
         self.assertIn("id: forceCloseBtn", self.qml)

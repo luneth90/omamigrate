@@ -65,14 +65,10 @@ action = sys.argv[1] if len(sys.argv) > 1 else ""
 cli_path = sys.argv[2] if len(sys.argv) > 2 else ""
 extra_arg = sys.argv[3] if len(sys.argv) > 3 else ""
 
-sudo_path = os.environ.get("OMAMIGRATE_TEST_SUDO", "/usr/bin/sudo")
+sudo_path = "/usr/bin/sudo"
 try:
     st = os.stat(sudo_path)
-    if sudo_path == "/usr/bin/sudo" or os.environ.get("OMAMIGRATE_TEST_VERIFY", "") == "1":
-        if st.st_uid != 0 or st.st_gid != 0 or not (st.st_mode & stat.S_ISUID) or (st.st_mode & 0o022):
-            print("SECURITY_VERIFY_FAILED", file=sys.stderr)
-            sys.exit(2)
-    elif not os.access(sudo_path, os.X_OK):
+    if st.st_uid != 0 or st.st_gid != 0 or not (st.st_mode & stat.S_ISUID) or (st.st_mode & 0o022):
         print("SECURITY_VERIFY_FAILED", file=sys.stderr)
         sys.exit(2)
 except Exception:
@@ -87,14 +83,14 @@ except Exception:
 clean_env = {"PATH": "/usr/bin:/bin", "HOME": os.environ.get("HOME", "")}
 
 if action == "backup":
-    ALLOWLIST = [
+    ALLOWLIST = (
         "etc/sing-box",
         "etc/mihomo",
         "etc/v2raya",
         "etc/xray",
         "etc/v2ray",
         "etc/daed"
-    ]
+    )
     unreadable = []
     for rel in ALLOWLIST:
         target = "/" + rel
@@ -120,13 +116,14 @@ if action == "backup":
             except Exception:
                 unreadable.append(rel)
 
-    test_unreadable = os.environ.get("OMAMIGRATE_TEST_UNREADABLE", "")
-    if test_unreadable and test_unreadable not in unreadable:
-        unreadable.append(test_unreadable)
+    unreadable_operands = [
+        item for item in unreadable
+        if item in ALLOWLIST and not item.startswith("-") and ".." not in item
+    ]
 
     staging_tar = ""
-    if unreadable or raw_pass:
-        if unreadable:
+    if unreadable_operands or raw_pass:
+        if unreadable_operands:
             staging_base = os.path.expanduser("~/.cache/omamigrate")
             os.makedirs(staging_base, mode=0o700, exist_ok=True)
             try:
@@ -143,7 +140,19 @@ if action == "backup":
                 print("SECURITY_STAGING_FAILED", file=sys.stderr)
                 sys.exit(1)
 
-            tar_cmd = [sudo_path, "-S", "-p", "", "/usr/bin/tar", "-C", "/", "-cf", "-"] + unreadable
+            tar_cmd = [
+                sudo_path,
+                "-S",
+                "-p",
+                "",
+                "--",
+                "/usr/bin/tar",
+                "-C",
+                "/",
+                "-cf",
+                "-",
+                "--",
+            ] + unreadable_operands
             p = subprocess.Popen(tar_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=clean_env, close_fds=True)
 
             stderr_chunks = []
@@ -295,7 +304,7 @@ elif action == "restore":
                     sys.exit(1)
 
             def run_privileged(args):
-                return subprocess.run([sudo_path, "-n"] + args, env=clean_env, capture_output=True)
+                return subprocess.run([sudo_path, "-n", "--"] + args, env=clean_env, capture_output=True)
 
             pkg_file = os.path.join(stage_ready_dir, "pkg_meta", "missing_native_pkgs.txt")
             if os.path.exists(pkg_file):
@@ -305,7 +314,7 @@ elif action == "restore":
                 if valid_pkgs:
                     print("==> Installing " + str(len(valid_pkgs)) + " system package(s)...")
                     sys.stdout.flush()
-                    run_privileged(["/usr/bin/pacman", "-Syu", "--needed", "--noconfirm"] + valid_pkgs)
+                    run_privileged(["/usr/bin/pacman", "-Syu", "--needed", "--noconfirm", "--"] + valid_pkgs)
 
             sys_root = os.path.join(stage_ready_dir, "system_root")
             if os.path.exists(sys_root):
@@ -318,18 +327,20 @@ elif action == "restore":
                             if link_dest.startswith("/") or ".." in link_dest.split("/"):
                                 continue
                         rel = os.path.relpath(full, sys_root)
+                        if rel.startswith("-") or ".." in rel.split("/"):
+                            continue
                         if any(rel == p or rel.startswith(p + "/") for p in ALLOWED_PREFIXES):
                             deploy_items.append(rel)
                 if deploy_items:
                     print("==> Deploying system configurations...")
                     sys.stdout.flush()
                     tar_proc = subprocess.Popen(
-                        ["/usr/bin/tar", "-C", sys_root, "-cf", "-"] + deploy_items,
+                        ["/usr/bin/tar", "-C", sys_root, "-cf", "-", "--"] + deploy_items,
                         stdout=subprocess.PIPE,
                         env=clean_env
                     )
                     sudo_tar = subprocess.Popen(
-                        [sudo_path, "-n", "/usr/bin/tar", "-C", "/", "--no-same-owner", "--no-overwrite-dir", "-xpf", "-"],
+                        [sudo_path, "-n", "--", "/usr/bin/tar", "-C", "/", "--no-same-owner", "--no-overwrite-dir", "-xpf", "-"],
                         stdin=tar_proc.stdout,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
@@ -339,22 +350,22 @@ elif action == "restore":
                     sudo_tar.communicate()
 
                 if os.path.exists(os.path.join(sys_root, "etc/sing-box")):
-                    run_privileged(["/usr/bin/chown", "-R", "root:sing-box", "/etc/sing-box"])
-                    run_privileged(["/usr/bin/chmod", "-R", "u=rwX,g=rX,o=", "/etc/sing-box"])
+                    run_privileged(["/usr/bin/chown", "-R", "--", "root:sing-box", "/etc/sing-box"])
+                    run_privileged(["/usr/bin/chmod", "-R", "--", "u=rwX,g=rX,o=", "/etc/sing-box"])
                     user_name = os.environ.get("USER", "")
                     if user_name:
-                        run_privileged(["/usr/bin/usermod", "-aG", "sing-box", user_name])
+                        run_privileged(["/usr/bin/usermod", "-aG", "sing-box", "--", user_name])
                 if os.path.exists(os.path.join(sys_root, "usr/local/bin/sing-box-node-rotate")):
-                    run_privileged(["/usr/bin/chown", "root:root", "/usr/local/bin/sing-box-node-rotate"])
-                    run_privileged(["/usr/bin/chmod", "755", "/usr/local/bin/sing-box-node-rotate"])
+                    run_privileged(["/usr/bin/chown", "--", "root:root", "/usr/local/bin/sing-box-node-rotate"])
+                    run_privileged(["/usr/bin/chmod", "--", "755", "/usr/local/bin/sing-box-node-rotate"])
 
             tun_marker = os.path.join(stage_ready_dir, "pkg_meta", "sing_box_tun.req")
             if os.path.exists(tun_marker):
-                run_privileged(["/usr/bin/modprobe", "tun"])
+                run_privileged(["/usr/bin/modprobe", "--", "tun"])
                 mod_conf = "/etc/modules-load.d/99-omamigrate-sing-box-tun.conf"
-                p_tun = subprocess.Popen([sudo_path, "-n", "/usr/bin/tee", mod_conf], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, env=clean_env)
+                p_tun = subprocess.Popen([sudo_path, "-n", "--", "/usr/bin/tee", "--", mod_conf], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, env=clean_env)
                 p_tun.communicate(input=b"tun" + bytes([10]))
-                run_privileged(["/usr/bin/chmod", "644", mod_conf])
+                run_privileged(["/usr/bin/chmod", "--", "644", mod_conf])
 
             run_privileged(["/usr/bin/systemctl", "daemon-reload"])
             ALLOWED_SERVICES = [
@@ -370,8 +381,8 @@ elif action == "restore":
             for srv in ALLOWED_SERVICES:
                 unit_file = os.path.join(sys_root, "etc/systemd/system", srv)
                 if os.path.exists(unit_file):
-                    run_privileged(["/usr/bin/systemctl", "enable", srv])
-                    run_privileged(["/usr/bin/systemctl", "restart", srv])
+                    run_privileged(["/usr/bin/systemctl", "enable", "--", srv])
+                    run_privileged(["/usr/bin/systemctl", "restart", "--", srv])
 
             print("Restoration completed successfully!")
             sys.stdout.flush()
