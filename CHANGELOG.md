@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.9] - 2026-09-16
+
+### Security & Hardening
+- **Bounded Staging Traversal & Resource Exhaustion Defense**: Enforced strict aggregate limits on restored configuration files: maximum 50 files (`MAX_CONFIG_FILES = 50`), maximum 5 MiB total aggregate bytes (`MAX_CONFIG_TOTAL_BYTES = 5 * 1024 * 1024`), and maximum 2 MiB per file (`MAX_SINGLE_FILE_BYTES = 2 * 1024 * 1024`). Traversal immediately breaks when limits are reached, preventing CPU, memory, or disk DoS by compromised or malicious workers.
+- **Single-Pass Tar Streaming via Held Descriptors**: Eliminated all multi-copy in-memory buffering (`validated_files`, `BytesIO`, and `getvalue()`). Configuration files are opened with `O_RDONLY | O_NOFOLLOW`, validated via `fstat`, and their descriptors are held open. Tar records are streamed directly from held descriptors into the `sudo tar` stdin pipe, maintaining minimal memory overhead and preventing staging swap / TOCTOU attacks.
+- **Secure & Bounded Package Metadata (`missing_native_pkgs.txt`)**: Replaced pathname reopen with `O_RDONLY | O_NOFOLLOW` descriptor allocation and `fstat` validation (regular file, current user ownership, non-executable, size capped at <= 64 KiB). Package list size is hard-capped at 250 packages.
+- **Archive Integrity Binding for Privileged Packages**: Package names passed to privileged `pacman` are strictly validated and bound to either the explicit package manifest (`pkg_meta/packages_explicit.txt`) inside the selected archive or trusted core dependencies (`CORE_ALLOWED_PKGS`), rejecting any arbitrary package injections from staging workers.
+- **Adversarial Regression Coverage (Test 7)**: Added Regression Test 7 to `tests/test_credential_isolation.sh` simulating excessive file count flood (>50), aggregate byte flood (>5MB), oversized package metadata (>64KB), and unbound arbitrary package injection.
+
 ## [1.1.8] - 2026-09-15
 
 ### Security & Hardening

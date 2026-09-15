@@ -307,21 +307,94 @@ elif action == "restore":
             def run_privileged(args):
                 return subprocess.run([sudo_path, "-n", "--"] + args, env=clean_env, capture_output=True)
 
-            pkg_file = os.path.join(stage_ready_dir, "pkg_meta", "missing_native_pkgs.txt")
-            if os.path.exists(pkg_file) and not os.path.islink(pkg_file):
-                with open(pkg_file, "r") as f:
-                    pkgs = [line.strip() for line in f if line.strip()]
-                valid_pkgs = [p for p in pkgs if all(c.isalnum() or c in "_@.+-" for c in p) and not p.startswith("-")]
-                if valid_pkgs:
-                    print("==> Installing " + str(len(valid_pkgs)) + " system package(s)...")
-                    sys.stdout.flush()
-                    run_privileged(["/usr/bin/pacman", "-Syu", "--needed", "--noconfirm", "--"] + valid_pkgs)
+            CORE_ALLOWED_PKGS = (
+                "pass",
+                "fcitx5",
+                "fcitx5-chinese-addons",
+                "fcitx5-configtool",
+                "jq",
+                "curl",
+                "github-cli",
+                "rsync",
+                "sing-box",
+                "python"
+            )
+            allowed_archive_pkgs = set(CORE_ALLOWED_PKGS)
+            if archive_path and os.path.exists(archive_path) and not os.path.islink(archive_path):
+                try:
+                    with tarfile.open(archive_path, "r:*") as tf_arch:
+                        ti_pkg = None
+                        try:
+                            ti_pkg = tf_arch.getmember("pkg_meta/packages_explicit.txt")
+                        except KeyError:
+                            pass
+                        if ti_pkg and ti_pkg.isfile() and ti_pkg.size <= 256 * 1024:
+                            f_pkg = tf_arch.extractfile(ti_pkg)
+                            if f_pkg:
+                                for line in f_pkg.read().decode("utf-8", errors="replace").splitlines():
+                                    p_name = line.strip()
+                                    if p_name and len(p_name) <= 128 and not p_name.startswith("-") and all(c.isalnum() or c in "_@.+-" for c in p_name):
+                                        allowed_archive_pkgs.add(p_name)
+                except Exception:
+                    pass
 
-            validated_files = {}
+            pkg_file = os.path.join(stage_ready_dir, "pkg_meta", "missing_native_pkgs.txt")
+            valid_pkgs = []
+            if os.path.exists(pkg_file) and not os.path.islink(pkg_file):
+                pkg_fd = -1
+                try:
+                    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                    pkg_fd = os.open(pkg_file, flags)
+                    st_pkg = os.fstat(pkg_fd)
+                    if (
+                        stat.S_ISREG(st_pkg.st_mode) and
+                        st_pkg.st_uid == os.getuid() and
+                        not (st_pkg.st_mode & 0o111) and
+                        not (st_pkg.st_mode & 0o002) and
+                        st_pkg.st_size <= 64 * 1024
+                    ):
+                        raw_data = os.read(pkg_fd, 65536)
+                        for line in raw_data.decode("utf-8", errors="replace").splitlines():
+                            p = line.strip()
+                            if not p or len(p) > 128 or p.startswith("-"):
+                                continue
+                            if not all(c.isalnum() or c in "_@.+-" for c in p):
+                                continue
+                            if p in allowed_archive_pkgs:
+                                valid_pkgs.append(p)
+                                if len(valid_pkgs) >= 250:
+                                    break
+                except Exception:
+                    pass
+                finally:
+                    if pkg_fd >= 0:
+                        try:
+                            os.close(pkg_fd)
+                        except Exception:
+                            pass
+
+            if valid_pkgs:
+                print("==> Installing " + str(len(valid_pkgs)) + " system package(s)...")
+                sys.stdout.flush()
+                run_privileged(["/usr/bin/pacman", "-Syu", "--needed", "--noconfirm", "--"] + valid_pkgs)
+
+            MAX_CONFIG_FILES = 50
+            MAX_CONFIG_TOTAL_BYTES = 5 * 1024 * 1024
+            MAX_SINGLE_FILE_BYTES = 2 * 1024 * 1024
+            held_descriptors = []
+            deployed_prefixes = set()
+            total_config_bytes = 0
+            traversal_stopped = False
             sys_root = os.path.join(stage_ready_dir, "system_root")
+
             if os.path.exists(sys_root) and not os.path.islink(sys_root):
                 for root, dirs, files in os.walk(sys_root):
+                    if traversal_stopped:
+                        break
                     for f in files:
+                        if len(held_descriptors) >= MAX_CONFIG_FILES:
+                            traversal_stopped = True
+                            break
                         full = os.path.join(root, f)
                         if os.path.islink(full):
                             continue
@@ -330,6 +403,7 @@ elif action == "restore":
                             continue
                         if not any(rel == p or rel.startswith(p + "/") for p in ALLOWED_CONFIG_PREFIXES):
                             continue
+                        fd = -1
                         try:
                             flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
                             fd = os.open(full, flags)
@@ -340,57 +414,85 @@ elif action == "restore":
                             if not stat.S_ISREG(st.st_mode):
                                 os.close(fd)
                                 continue
+                            if st.st_uid != os.getuid():
+                                os.close(fd)
+                                continue
                             if st.st_mode & 0o111:
                                 os.close(fd)
                                 continue
-                            if st.st_size > 10 * 1024 * 1024:
+                            if st.st_mode & 0o002:
                                 os.close(fd)
                                 continue
-                            with open(fd, "rb", closefd=True) as fobj:
-                                content = fobj.read()
+                            if st.st_size > MAX_SINGLE_FILE_BYTES:
+                                os.close(fd)
+                                continue
+                            if total_config_bytes + st.st_size > MAX_CONFIG_TOTAL_BYTES:
+                                os.close(fd)
+                                traversal_stopped = True
+                                break
                             if rel.endswith(".json"):
                                 try:
-                                    json.loads(content.decode("utf-8"))
+                                    json_bytes = os.read(fd, st.st_size)
+                                    json.loads(json_bytes.decode("utf-8"))
+                                    os.lseek(fd, 0, os.SEEK_SET)
                                 except Exception:
+                                    os.close(fd)
                                     continue
-                            validated_files[rel] = content
+                            total_config_bytes += st.st_size
+                            held_descriptors.append((rel, fd, st.st_size))
                         except Exception:
                             try:
                                 os.close(fd)
                             except Exception:
                                 pass
 
-            if validated_files:
-                print("==> Deploying system configurations...")
-                sys.stdout.flush()
-                tar_stream = io.BytesIO()
-                with tarfile.open(fileobj=tar_stream, mode="w") as tf:
-                    for rel_path, file_bytes in validated_files.items():
-                        ti = tarfile.TarInfo(name=rel_path)
-                        ti.size = len(file_bytes)
-                        ti.mtime = int(time.time())
-                        ti.type = tarfile.REGTYPE
-                        if rel_path.startswith("etc/sing-box"):
-                            ti.mode = 0o640
-                            ti.uname = "root"
-                            ti.gname = "sing-box"
-                        else:
-                            ti.mode = 0o644
-                            ti.uname = "root"
-                            ti.gname = "root"
-                        tf.addfile(ti, io.BytesIO(file_bytes))
-                tar_bytes = tar_stream.getvalue()
+            try:
+                if held_descriptors:
+                    print("==> Deploying system configurations...")
+                    sys.stdout.flush()
+                    sudo_tar = subprocess.Popen(
+                        [sudo_path, "-n", "--", "/usr/bin/tar", "-C", "/", "--no-same-owner", "--no-overwrite-dir", "-xpf", "-"],
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        env=clean_env
+                    )
+                    try:
+                        with tarfile.open(mode="w|", fileobj=sudo_tar.stdin) as tf:
+                            for rel_path, fd, fsize in held_descriptors:
+                                for pfx in ALLOWED_CONFIG_PREFIXES:
+                                    if rel_path == pfx or rel_path.startswith(pfx + "/"):
+                                        deployed_prefixes.add(pfx)
+                                ti = tarfile.TarInfo(name=rel_path)
+                                ti.size = fsize
+                                ti.mtime = int(time.time())
+                                ti.type = tarfile.REGTYPE
+                                if rel_path.startswith("etc/sing-box"):
+                                    ti.mode = 0o640
+                                    ti.uname = "root"
+                                    ti.gname = "sing-box"
+                                else:
+                                    ti.mode = 0o644
+                                    ti.uname = "root"
+                                    ti.gname = "root"
+                                with open(fd, "rb", closefd=False) as fobj:
+                                    tf.addfile(ti, fobj)
+                    except Exception:
+                        pass
+                    finally:
+                        try:
+                            sudo_tar.stdin.close()
+                        except Exception:
+                            pass
+                    sudo_tar.communicate()
+            finally:
+                for rel_path, fd, fsize in held_descriptors:
+                    try:
+                        os.close(fd)
+                    except Exception:
+                        pass
 
-                sudo_tar = subprocess.Popen(
-                    [sudo_path, "-n", "--", "/usr/bin/tar", "-C", "/", "--no-same-owner", "--no-overwrite-dir", "-xpf", "-"],
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    env=clean_env
-                )
-                sudo_tar.communicate(input=tar_bytes)
-
-            if any(k.startswith("etc/sing-box") for k in validated_files):
+            if "etc/sing-box" in deployed_prefixes:
                 run_privileged(["/usr/bin/chown", "-R", "--", "root:sing-box", "/etc/sing-box"])
                 run_privileged(["/usr/bin/chmod", "-R", "--", "u=rwX,g=rX,o=", "/etc/sing-box"])
                 user_name = os.environ.get("USER", "")
@@ -399,11 +501,18 @@ elif action == "restore":
 
             tun_marker = os.path.join(stage_ready_dir, "pkg_meta", "sing_box_tun.req")
             if os.path.exists(tun_marker) and not os.path.islink(tun_marker):
-                run_privileged(["/usr/bin/modprobe", "--", "tun"])
-                mod_conf = "/etc/modules-load.d/99-omamigrate-sing-box-tun.conf"
-                p_tun = subprocess.Popen([sudo_path, "-n", "--", "/usr/bin/tee", "--", mod_conf], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, env=clean_env)
-                p_tun.communicate(input=b"tun" + bytes([10]))
-                run_privileged(["/usr/bin/chmod", "--", "644", mod_conf])
+                try:
+                    tun_fd = os.open(tun_marker, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+                    st_tun = os.fstat(tun_fd)
+                    os.close(tun_fd)
+                    if stat.S_ISREG(st_tun.st_mode) and st_tun.st_uid == os.getuid():
+                        run_privileged(["/usr/bin/modprobe", "--", "tun"])
+                        mod_conf = "/etc/modules-load.d/99-omamigrate-sing-box-tun.conf"
+                        p_tun = subprocess.Popen([sudo_path, "-n", "--", "/usr/bin/tee", "--", mod_conf], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, env=clean_env)
+                        p_tun.communicate(input=b"tun" + bytes([10]))
+                        run_privileged(["/usr/bin/chmod", "--", "644", mod_conf])
+                except Exception:
+                    pass
 
             run_privileged(["/usr/bin/systemctl", "daemon-reload"])
             ALLOWED_SERVICES = [
@@ -424,7 +533,7 @@ elif action == "restore":
                 "etc/daed": "daed.service"
             }
             for prefix, srv in SERVICE_TRIGGER_MAP.items():
-                if any(k.startswith(prefix) for k in validated_files) and srv in ALLOWED_SERVICES:
+                if prefix in deployed_prefixes and srv in ALLOWED_SERVICES:
                     chk = subprocess.run([sudo_path, "-n", "--", "/usr/bin/systemctl", "list-unit-files", "--", srv], env=clean_env, capture_output=True)
                     if chk.returncode == 0 and srv.encode("utf-8") in chk.stdout:
                         run_privileged(["/usr/bin/systemctl", "enable", "--", srv])

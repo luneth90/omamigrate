@@ -724,6 +724,160 @@ fi
 
 echo "  -> Verified: adversarial worker, executable script, unit injection, symlink traversal, and staging swap were strictly defeated."
 
+# Regression Test 7: Bounded Staging Limits & Oversized Package Metadata Defense
+echo "==> [Credential Isolation] 7. Regression Test: Bounded Staging & Package Metadata Defense..."
+echo "  Testing config file count limits (>50), total byte limits (>5MB), and package metadata bounds..."
+
+BOUNDS_DIR="${TEST_DIR}/bounds_stage"
+mkdir -p "${BOUNDS_DIR}/system_root/etc/sing-box"
+mkdir -p "${BOUNDS_DIR}/pkg_meta"
+
+# 1. Populate > 50 valid json config files to test MAX_CONFIG_FILES cap (50)
+for i in $(seq 1 70); do
+  echo "{\"rule_id\": $i}" > "${BOUNDS_DIR}/system_root/etc/sing-box/rule_${i}.json"
+  chmod 644 "${BOUNDS_DIR}/system_root/etc/sing-box/rule_${i}.json"
+done
+
+# 2. Package metadata adversarial cases:
+# Test 7.1: Oversized missing_native_pkgs.txt (>64KB) - should be skipped/rejected
+OVERSIZED_PKG_META="${BOUNDS_DIR}/pkg_meta/missing_native_pkgs.txt"
+python3 -c "
+with open('${OVERSIZED_PKG_META}', 'w') as f:
+    for i in range(10000):
+        f.write('malicious-pkg-' + str(i) + '\n')
+"
+chmod 644 "${OVERSIZED_PKG_META}"
+
+BOUNDS_WORKER="${TEST_DIR}/bounds_worker.sh"
+cat << EOF > "${BOUNDS_WORKER}"
+#!/usr/bin/env bash
+echo "OMAMIGRATE_STAGE_READY: ${BOUNDS_DIR}"
+exit 0
+EOF
+chmod 755 "${BOUNDS_WORKER}"
+
+> "${TEST_MOCK_LOG}"
+> /tmp/sudo_mock.log
+rm -f "${TEST_DIR}/sudo_timestamp"
+
+# Create a valid test archive with known allowed packages
+BOUNDS_ARCHIVE="${TEST_DIR}/bounds_test_archive.tar.gz"
+python3 -c "
+import tarfile, io
+with tarfile.open('${BOUNDS_ARCHIVE}', 'w:gz') as tf:
+    ti = tarfile.TarInfo('pkg_meta/packages_explicit.txt')
+    data = b'sing-box\nmihomo\n'
+    ti.size = len(data)
+    tf.addfile(ti, io.BytesIO(data))
+"
+
+printf '%s\n' "${CANARY_SECRET}" | \
+  python3 "${RUNNER_SCRIPT}" "restore" "${BOUNDS_WORKER}" "${BOUNDS_ARCHIVE}"
+
+COMBINED_SUDO_LOG="${TEST_DIR}/combined_sudo.log"
+cat "${TEST_MOCK_LOG}" /tmp/sudo_mock.log 2>/dev/null > "${COMBINED_SUDO_LOG}" || true
+
+# Assertions for Test 7.1:
+# A. Oversized missing_native_pkgs.txt (>64KB) was NOT passed to pacman
+if grep -q "malicious-pkg" "${COMBINED_SUDO_LOG}" 2>/dev/null; then
+  echo "FAIL: Oversized package metadata was passed to pacman!" >&2
+  cat "${COMBINED_SUDO_LOG}" >&2
+  exit 1
+fi
+
+# B. File count in tar stream was capped at MAX_CONFIG_FILES (50)
+STREAMED_RULES=$(grep "etc/sing-box/rule_" "${COMBINED_SUDO_LOG}" 2>/dev/null | wc -l)
+if [ "$STREAMED_RULES" -gt 50 ]; then
+  echo "FAIL: Traversal streamed $STREAMED_RULES config files, exceeding MAX_CONFIG_FILES cap (50)!" >&2
+  cat "${COMBINED_SUDO_LOG}" >&2
+  exit 1
+fi
+if [ "$STREAMED_RULES" -eq 0 ]; then
+  echo "FAIL: No config files were streamed!" >&2
+  cat "${COMBINED_SUDO_LOG}" >&2
+  exit 1
+fi
+
+# Test 7.2: Verify package binding & cap with valid sized package metadata
+# Use fresh staging dir because runner cleans up stage_ready_dir upon completion
+BOUNDS_DIR_2="${TEST_DIR}/bounds_stage_2"
+mkdir -p "${BOUNDS_DIR_2}/pkg_meta"
+cat << EOF > "${BOUNDS_DIR_2}/pkg_meta/missing_native_pkgs.txt"
+mihomo
+sing-box
+untrusted-arbitrary-package
+EOF
+chmod 644 "${BOUNDS_DIR_2}/pkg_meta/missing_native_pkgs.txt"
+
+BOUNDS_WORKER_2="${TEST_DIR}/bounds_worker_2.sh"
+cat << EOF > "${BOUNDS_WORKER_2}"
+#!/usr/bin/env bash
+echo "OMAMIGRATE_STAGE_READY: ${BOUNDS_DIR_2}"
+exit 0
+EOF
+chmod 755 "${BOUNDS_WORKER_2}"
+
+> "${TEST_MOCK_LOG}"
+> /tmp/sudo_mock.log
+rm -f "${TEST_DIR}/sudo_timestamp"
+
+printf '%s\n' "${CANARY_SECRET}" | \
+  python3 "${RUNNER_SCRIPT}" "restore" "${BOUNDS_WORKER_2}" "${BOUNDS_ARCHIVE}"
+
+cat "${TEST_MOCK_LOG}" /tmp/sudo_mock.log 2>/dev/null > "${COMBINED_SUDO_LOG}" || true
+
+if grep -q "untrusted-arbitrary-package" "${COMBINED_SUDO_LOG}" 2>/dev/null; then
+  echo "FAIL: Untrusted package not bound to archive was passed to privileged pacman!" >&2
+  cat "${COMBINED_SUDO_LOG}" >&2
+  exit 1
+fi
+
+if ! grep -q "pacman.*sing-box" "${COMBINED_SUDO_LOG}" 2>/dev/null && \
+   ! grep -q "pacman.*mihomo" "${COMBINED_SUDO_LOG}" 2>/dev/null; then
+  echo "FAIL: Legitimate bound packages were not passed to pacman!" >&2
+  cat "${COMBINED_SUDO_LOG}" >&2
+  exit 1
+fi
+
+# Test 7.3: Total byte limit (> 5MB)
+BYTE_FLOOD_DIR="${TEST_DIR}/byte_flood_stage"
+mkdir -p "${BYTE_FLOOD_DIR}/system_root/etc/sing-box"
+# 4 files of 1.5MB each = 6.0MB total, which exceeds 5MB limit
+for i in 1 2 3 4; do
+  python3 -c "
+with open('${BYTE_FLOOD_DIR}/system_root/etc/sing-box/flood_${i}.json', 'w') as f:
+    f.write('{\"data\": \"' + 'A' * (1500 * 1024) + '\"}')
+"
+  chmod 644 "${BYTE_FLOOD_DIR}/system_root/etc/sing-box/flood_${i}.json"
+done
+
+BYTE_FLOOD_WORKER="${TEST_DIR}/byte_flood_worker.sh"
+cat << EOF > "${BYTE_FLOOD_WORKER}"
+#!/usr/bin/env bash
+echo "OMAMIGRATE_STAGE_READY: ${BYTE_FLOOD_DIR}"
+exit 0
+EOF
+chmod 755 "${BYTE_FLOOD_WORKER}"
+
+> "${TEST_MOCK_LOG}"
+> /tmp/sudo_mock.log
+rm -f "${TEST_DIR}/sudo_timestamp"
+
+printf '%s\n' "${CANARY_SECRET}" | \
+  python3 "${RUNNER_SCRIPT}" "restore" "${BYTE_FLOOD_WORKER}" "${BOUNDS_ARCHIVE}"
+
+cat "${TEST_MOCK_LOG}" /tmp/sudo_mock.log 2>/dev/null > "${COMBINED_SUDO_LOG}" || true
+
+# 3 files * 1.5MB = 4.5MB <= 5MB. 4th file would make it 6.0MB > 5MB, so at most 3 should be streamed
+FLOOD_STREAMED=$(grep "etc/sing-box/flood_" "${COMBINED_SUDO_LOG}" 2>/dev/null | wc -l)
+if [ "$FLOOD_STREAMED" -gt 3 ]; then
+  echo "FAIL: Byte flood exceeded MAX_CONFIG_TOTAL_BYTES (streamed $FLOOD_STREAMED large files)!" >&2
+  cat "${COMBINED_SUDO_LOG}" >&2
+  exit 1
+fi
+
+echo "  -> Verified: excessive file count (>50), total bytes (>5MB), and oversized/unbound package metadata were strictly defended."
+
 rm -f /tmp/canary_expected.txt /tmp/sudo_mock.log
 rm -rf "${TEST_DIR}"
 echo "==> [Credential Isolation] All tests passed! Credential exposure path completely eliminated."

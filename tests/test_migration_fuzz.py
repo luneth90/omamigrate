@@ -264,6 +264,10 @@ class TestRestoreContract(unittest.TestCase):
         self.assertIn("0o111", runner_code, "Runner must reject executable bits on restored configs")
         self.assertIn("tarfile.open", runner_code, "Runner must construct in-memory tar stream")
         self.assertIn("valid_stage", runner_code, "Runner must validate staging path integrity")
+        self.assertIn("MAX_CONFIG_FILES", runner_code, "Runner must enforce aggregate file count limit")
+        self.assertIn("MAX_CONFIG_TOTAL_BYTES", runner_code, "Runner must enforce aggregate byte limit")
+        self.assertIn("held_descriptors", runner_code, "Runner must stream via held descriptors")
+        self.assertIn("CORE_ALLOWED_PKGS", runner_code, "Runner must bind package metadata to allowed packages")
 
     def test_force_close_button_contract(self):
         self.assertIn("id: forceCloseBtn", self.qml)
