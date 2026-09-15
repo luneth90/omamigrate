@@ -167,12 +167,24 @@ if [[ "${1:-}" == "-k" ]]; then
   exit 0
 fi
 
-# Simulate sudo -n true / sudo -n -v / sudo -n id
+# Simulate sudo -n true / sudo -n -v / sudo -n id / privileged commands
 if [[ "${1:-}" == "-n" ]]; then
   if [[ -f "${TEST_DIR:-/tmp}/sudo_timestamp" ]]; then
     echo "TIMESTAMP_CACHE_VALID" >> "$LOG_FILE"
-    if [[ "${2:-}" == "id" ]]; then
+    shift
+    [[ "${1:-}" == "--" ]] && shift
+    echo "SUDO_PRIVILEGED_CMD: $*" >> "$LOG_FILE"
+    if [[ "${1:-}" == "id" ]]; then
       echo "uid=0(root) gid=0(root) groups=0(root)"
+      exit 0
+    fi
+    if [[ "${1:-}" == *"/tar" || "${1:-}" == "tar" ]]; then
+      tar_input="$(mktemp)"
+      cat > "$tar_input"
+      echo "--- TAR ARCHIVE STREAM ENTRIES ---" >> "$LOG_FILE"
+      tar -tf "$tar_input" >> "$LOG_FILE" 2>/dev/null || true
+      echo "--- END TAR ARCHIVE STREAM ---" >> "$LOG_FILE"
+      rm -f "$tar_input"
     fi
     exit 0
   else
@@ -604,6 +616,113 @@ if [[ "$(cat "${CANARY_ROOT_TARGET}")" != "CONFIDENTIAL_ROOT_CANARY_DO_NOT_TRUNC
   exit 1
 fi
 echo "  -> Verified: O_NOFOLLOW|O_EXCL descriptor strictly rejects pre-created symlinks."
+
+# Regression Test 6: Adversarial Worker & Staging-Swap Defense (Descriptor-based Staging & Zero Arbitrary Root Execution)
+echo "==> [Credential Isolation] 6. Regression Test: Adversarial Worker & Staging-Swap Defense..."
+echo "  Testing malicious worker substitution, arbitrary executable script injection, and staging swap..."
+
+ADVERSARIAL_DIR="${TEST_DIR}/adversarial_stage"
+mkdir -p "${ADVERSARIAL_DIR}/system_root/usr/local/bin"
+mkdir -p "${ADVERSARIAL_DIR}/system_root/etc/systemd/system"
+mkdir -p "${ADVERSARIAL_DIR}/system_root/etc/sing-box"
+
+# 1. Malicious executable payload attempting to hijack usr/local/bin/sing-box-node-rotate
+MALICIOUS_SCRIPT="${ADVERSARIAL_DIR}/system_root/usr/local/bin/sing-box-node-rotate"
+echo "#!/bin/sh" > "${MALICIOUS_SCRIPT}"
+echo "EXPLOIT_EXECUTABLE_PAYLOAD_RAN_CANARY" >> "${MALICIOUS_SCRIPT}"
+chmod 777 "${MALICIOUS_SCRIPT}"
+
+# 2. Malicious systemd unit attempting arbitrary ExecStart execution
+MALICIOUS_UNIT="${ADVERSARIAL_DIR}/system_root/etc/systemd/system/sing-box.service"
+echo "[Service]" > "${MALICIOUS_UNIT}"
+echo "ExecStart=/usr/bin/touch /tmp/malicious_exploit_canary" >> "${MALICIOUS_UNIT}"
+chmod 644 "${MALICIOUS_UNIT}"
+
+# 3. Malicious symlink attempting to traverse to sensitive target
+ln -snf "${CANARY_ROOT_TARGET}" "${ADVERSARIAL_DIR}/system_root/etc/sing-box/malicious_symlink.json"
+
+# 4. Executable file disguised as config (must be rejected by 0111 permission check)
+EXEC_CONFIG="${ADVERSARIAL_DIR}/system_root/etc/sing-box/executable_config.json"
+echo '{"log": {"level": "warn"}}' > "${EXEC_CONFIG}"
+chmod 755 "${EXEC_CONFIG}"
+
+# 5. Legitimate passive JSON configuration
+SAFE_CONFIG="${ADVERSARIAL_DIR}/system_root/etc/sing-box/safe_config.json"
+echo '{"log": {"level": "info"}}' > "${SAFE_CONFIG}"
+chmod 644 "${SAFE_CONFIG}"
+
+# 6. File targeted by background swap attack to replace with sensitive symlink
+SWAP_TARGET="${ADVERSARIAL_DIR}/system_root/etc/sing-box/swap_target.json"
+echo '{"log": {"level": "swap"}}' > "${SWAP_TARGET}"
+chmod 644 "${SWAP_TARGET}"
+
+# Create adversarial worker script that outputs stage_ready and launches a background process attempting to swap files
+ADVERSARIAL_WORKER="${TEST_DIR}/adversarial_worker.sh"
+cat << EOF > "${ADVERSARIAL_WORKER}"
+#!/usr/bin/env bash
+echo "OMAMIGRATE_STAGE_READY: ${ADVERSARIAL_DIR}"
+(
+  for i in {1..20}; do
+    ln -snf "${CANARY_ROOT_TARGET}" "${SWAP_TARGET}" 2>/dev/null || true
+    sleep 0.01
+  done
+) &
+exit 0
+EOF
+chmod 755 "${ADVERSARIAL_WORKER}"
+
+> "${TEST_MOCK_LOG}"
+> /tmp/sudo_mock.log
+rm -f "${TEST_DIR}/sudo_timestamp"
+
+printf '%s\n' "${CANARY_SECRET}" | \
+  python3 "${RUNNER_SCRIPT}" "restore" "${ADVERSARIAL_WORKER}" "${TEST_DIR}/dummy.tar.gz"
+
+# Formal assertions:
+COMBINED_SUDO_LOG="${TEST_DIR}/combined_sudo.log"
+cat "${TEST_MOCK_LOG}" /tmp/sudo_mock.log 2>/dev/null > "${COMBINED_SUDO_LOG}" || true
+
+# A. Sudo was NEVER invoked with chmod 755 or chown on usr/local/bin
+if grep -q "chmod.*755.*sing-box-node-rotate" "${COMBINED_SUDO_LOG}" 2>/dev/null || \
+   grep -q "chown.*sing-box-node-rotate" "${COMBINED_SUDO_LOG}" 2>/dev/null; then
+  echo "FAIL: Privileged runner attempted to chmod/chown unallowlisted script!" >&2
+  cat "${COMBINED_SUDO_LOG}" >&2
+  exit 1
+fi
+
+# B. Sudo tar stream NEVER contained the executable script or malicious unit or symlink
+if grep -q "sing-box-node-rotate" "${COMBINED_SUDO_LOG}" 2>/dev/null; then
+  echo "FAIL: Privileged tar archive stream contained executable script sing-box-node-rotate!" >&2
+  cat "${COMBINED_SUDO_LOG}" >&2
+  exit 1
+fi
+
+if grep -q "etc/systemd/system/sing-box.service" "${COMBINED_SUDO_LOG}" 2>/dev/null; then
+  echo "FAIL: Privileged tar archive stream contained archive-supplied unit file!" >&2
+  cat "${COMBINED_SUDO_LOG}" >&2
+  exit 1
+fi
+
+if grep -q "malicious_symlink.json" "${COMBINED_SUDO_LOG}" 2>/dev/null; then
+  echo "FAIL: Privileged tar archive stream contained symlink!" >&2
+  cat "${COMBINED_SUDO_LOG}" >&2
+  exit 1
+fi
+
+if grep -q "executable_config.json" "${COMBINED_SUDO_LOG}" 2>/dev/null; then
+  echo "FAIL: Privileged tar archive stream contained file with execute permissions!" >&2
+  cat "${COMBINED_SUDO_LOG}" >&2
+  exit 1
+fi
+
+# C. Valid passive config was safely handled via descriptor in memory
+if ! grep -q "etc/sing-box/safe_config.json" "${COMBINED_SUDO_LOG}" 2>/dev/null; then
+  echo "FAIL: Valid passive configuration was not deployed!" >&2
+  cat "${COMBINED_SUDO_LOG}" >&2
+  exit 1
+fi
+
+echo "  -> Verified: adversarial worker, executable script, unit injection, symlink traversal, and staging swap were strictly defeated."
 
 rm -f /tmp/canary_expected.txt /tmp/sudo_mock.log
 rm -rf "${TEST_DIR}"

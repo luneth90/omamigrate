@@ -59,7 +59,7 @@ Item {
   readonly property string archiveScannerPath: String(Qt.resolvedUrl("lib/scan-archives.sh")).replace("file://", "")
 
   readonly property string runnerPythonCode: `
-import os, sys, stat, subprocess, tempfile, shutil, threading, secrets
+import os, sys, stat, subprocess, tempfile, shutil, threading, secrets, tarfile, io, json, time
 
 action = sys.argv[1] if len(sys.argv) > 1 else ""
 cli_path = sys.argv[2] if len(sys.argv) > 2 else ""
@@ -149,8 +149,7 @@ if action == "backup":
                 "/usr/bin/tar",
                 "-C",
                 "/",
-                "-cf",
-                "-",
+                "-cf", "-",
                 "--",
             ] + unreadable_operands
             p = subprocess.Popen(tar_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=clean_env, close_fds=True)
@@ -274,27 +273,29 @@ elif action == "restore":
         raw_pass = None
         sys.exit(p_worker.returncode)
 
-    if stage_ready_dir and os.path.exists(stage_ready_dir):
+    valid_stage = False
+    if stage_ready_dir and not os.path.islink(stage_ready_dir):
         try:
-            ALLOWED_PREFIXES = (
+            real_stage = os.path.realpath(stage_ready_dir)
+            cache_base = os.path.realpath(os.path.expanduser("~/.cache/omamigrate"))
+            st_stage = os.lstat(real_stage)
+            if (real_stage.startswith(cache_base) or real_stage.startswith("/tmp/")) and stat.S_ISDIR(st_stage.st_mode) and st_stage.st_uid == os.getuid() and not (st_stage.st_mode & 0o002):
+                valid_stage = True
+        except Exception:
+            valid_stage = False
+
+    if valid_stage:
+        try:
+            ALLOWED_CONFIG_PREFIXES = (
                 "etc/sing-box",
                 "etc/mihomo",
                 "etc/v2raya",
                 "etc/xray",
                 "etc/v2ray",
                 "etc/daed",
-                "etc/systemd/system/sing-box.service",
-                "etc/systemd/system/sing-box-node-rotate.service",
-                "etc/systemd/system/sing-box-node-rotate.timer",
-                "etc/systemd/system/mihomo.service",
-                "etc/systemd/system/v2raya.service",
-                "etc/systemd/system/xray.service",
-                "etc/systemd/system/v2ray.service",
-                "etc/systemd/system/daed.service",
-                "etc/systemd/system/daed-next.service",
-                "etc/proxychains.conf",
-                "usr/local/bin/sing-box-node-rotate"
+                "etc/proxychains.conf"
             )
+            ALLOWED_PREFIXES = ALLOWED_CONFIG_PREFIXES
 
             if raw_pass:
                 p_auth = subprocess.Popen([sudo_path, "-S", "-p", "", "-v"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=clean_env, close_fds=True)
@@ -307,7 +308,7 @@ elif action == "restore":
                 return subprocess.run([sudo_path, "-n", "--"] + args, env=clean_env, capture_output=True)
 
             pkg_file = os.path.join(stage_ready_dir, "pkg_meta", "missing_native_pkgs.txt")
-            if os.path.exists(pkg_file):
+            if os.path.exists(pkg_file) and not os.path.islink(pkg_file):
                 with open(pkg_file, "r") as f:
                     pkgs = [line.strip() for line in f if line.strip()]
                 valid_pkgs = [p for p in pkgs if all(c.isalnum() or c in "_@.+-" for c in p) and not p.startswith("-")]
@@ -316,51 +317,88 @@ elif action == "restore":
                     sys.stdout.flush()
                     run_privileged(["/usr/bin/pacman", "-Syu", "--needed", "--noconfirm", "--"] + valid_pkgs)
 
+            validated_files = {}
             sys_root = os.path.join(stage_ready_dir, "system_root")
-            if os.path.exists(sys_root):
-                deploy_items = []
+            if os.path.exists(sys_root) and not os.path.islink(sys_root):
                 for root, dirs, files in os.walk(sys_root):
                     for f in files:
                         full = os.path.join(root, f)
                         if os.path.islink(full):
-                            link_dest = os.readlink(full)
-                            if link_dest.startswith("/") or ".." in link_dest.split("/"):
-                                continue
+                            continue
                         rel = os.path.relpath(full, sys_root)
                         if rel.startswith("-") or ".." in rel.split("/"):
                             continue
-                        if any(rel == p or rel.startswith(p + "/") for p in ALLOWED_PREFIXES):
-                            deploy_items.append(rel)
-                if deploy_items:
-                    print("==> Deploying system configurations...")
-                    sys.stdout.flush()
-                    tar_proc = subprocess.Popen(
-                        ["/usr/bin/tar", "-C", sys_root, "-cf", "-", "--"] + deploy_items,
-                        stdout=subprocess.PIPE,
-                        env=clean_env
-                    )
-                    sudo_tar = subprocess.Popen(
-                        [sudo_path, "-n", "--", "/usr/bin/tar", "-C", "/", "--no-same-owner", "--no-overwrite-dir", "-xpf", "-"],
-                        stdin=tar_proc.stdout,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        env=clean_env
-                    )
-                    tar_proc.stdout.close()
-                    sudo_tar.communicate()
+                        if not any(rel == p or rel.startswith(p + "/") for p in ALLOWED_CONFIG_PREFIXES):
+                            continue
+                        try:
+                            flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                            fd = os.open(full, flags)
+                        except (OSError, IOError):
+                            continue
+                        try:
+                            st = os.fstat(fd)
+                            if not stat.S_ISREG(st.st_mode):
+                                os.close(fd)
+                                continue
+                            if st.st_mode & 0o111:
+                                os.close(fd)
+                                continue
+                            if st.st_size > 10 * 1024 * 1024:
+                                os.close(fd)
+                                continue
+                            with open(fd, "rb", closefd=True) as fobj:
+                                content = fobj.read()
+                            if rel.endswith(".json"):
+                                try:
+                                    json.loads(content.decode("utf-8"))
+                                except Exception:
+                                    continue
+                            validated_files[rel] = content
+                        except Exception:
+                            try:
+                                os.close(fd)
+                            except Exception:
+                                pass
 
-                if os.path.exists(os.path.join(sys_root, "etc/sing-box")):
-                    run_privileged(["/usr/bin/chown", "-R", "--", "root:sing-box", "/etc/sing-box"])
-                    run_privileged(["/usr/bin/chmod", "-R", "--", "u=rwX,g=rX,o=", "/etc/sing-box"])
-                    user_name = os.environ.get("USER", "")
-                    if user_name:
-                        run_privileged(["/usr/bin/usermod", "-aG", "sing-box", "--", user_name])
-                if os.path.exists(os.path.join(sys_root, "usr/local/bin/sing-box-node-rotate")):
-                    run_privileged(["/usr/bin/chown", "--", "root:root", "/usr/local/bin/sing-box-node-rotate"])
-                    run_privileged(["/usr/bin/chmod", "--", "755", "/usr/local/bin/sing-box-node-rotate"])
+            if validated_files:
+                print("==> Deploying system configurations...")
+                sys.stdout.flush()
+                tar_stream = io.BytesIO()
+                with tarfile.open(fileobj=tar_stream, mode="w") as tf:
+                    for rel_path, file_bytes in validated_files.items():
+                        ti = tarfile.TarInfo(name=rel_path)
+                        ti.size = len(file_bytes)
+                        ti.mtime = int(time.time())
+                        ti.type = tarfile.REGTYPE
+                        if rel_path.startswith("etc/sing-box"):
+                            ti.mode = 0o640
+                            ti.uname = "root"
+                            ti.gname = "sing-box"
+                        else:
+                            ti.mode = 0o644
+                            ti.uname = "root"
+                            ti.gname = "root"
+                        tf.addfile(ti, io.BytesIO(file_bytes))
+                tar_bytes = tar_stream.getvalue()
+
+                sudo_tar = subprocess.Popen(
+                    [sudo_path, "-n", "--", "/usr/bin/tar", "-C", "/", "--no-same-owner", "--no-overwrite-dir", "-xpf", "-"],
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    env=clean_env
+                )
+                sudo_tar.communicate(input=tar_bytes)
+
+            if any(k.startswith("etc/sing-box") for k in validated_files):
+                run_privileged(["/usr/bin/chown", "-R", "--", "root:sing-box", "/etc/sing-box"])
+                run_privileged(["/usr/bin/chmod", "-R", "--", "u=rwX,g=rX,o=", "/etc/sing-box"])
+                user_name = os.environ.get("USER", "")
+                if user_name:
+                    run_privileged(["/usr/bin/usermod", "-aG", "sing-box", "--", user_name])
 
             tun_marker = os.path.join(stage_ready_dir, "pkg_meta", "sing_box_tun.req")
-            if os.path.exists(tun_marker):
+            if os.path.exists(tun_marker) and not os.path.islink(tun_marker):
                 run_privileged(["/usr/bin/modprobe", "--", "tun"])
                 mod_conf = "/etc/modules-load.d/99-omamigrate-sing-box-tun.conf"
                 p_tun = subprocess.Popen([sudo_path, "-n", "--", "/usr/bin/tee", "--", mod_conf], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, env=clean_env)
@@ -370,7 +408,6 @@ elif action == "restore":
             run_privileged(["/usr/bin/systemctl", "daemon-reload"])
             ALLOWED_SERVICES = [
                 "sing-box.service",
-                "sing-box-node-rotate.timer",
                 "mihomo.service",
                 "v2raya.service",
                 "xray.service",
@@ -378,11 +415,20 @@ elif action == "restore":
                 "daed.service",
                 "daed-next.service"
             ]
-            for srv in ALLOWED_SERVICES:
-                unit_file = os.path.join(sys_root, "etc/systemd/system", srv)
-                if os.path.exists(unit_file):
-                    run_privileged(["/usr/bin/systemctl", "enable", "--", srv])
-                    run_privileged(["/usr/bin/systemctl", "restart", "--", srv])
+            SERVICE_TRIGGER_MAP = {
+                "etc/sing-box": "sing-box.service",
+                "etc/mihomo": "mihomo.service",
+                "etc/v2raya": "v2raya.service",
+                "etc/xray": "xray.service",
+                "etc/v2ray": "v2ray.service",
+                "etc/daed": "daed.service"
+            }
+            for prefix, srv in SERVICE_TRIGGER_MAP.items():
+                if any(k.startswith(prefix) for k in validated_files) and srv in ALLOWED_SERVICES:
+                    chk = subprocess.run([sudo_path, "-n", "--", "/usr/bin/systemctl", "list-unit-files", "--", srv], env=clean_env, capture_output=True)
+                    if chk.returncode == 0 and srv.encode("utf-8") in chk.stdout:
+                        run_privileged(["/usr/bin/systemctl", "enable", "--", srv])
+                        run_privileged(["/usr/bin/systemctl", "restart", "--", srv])
 
             print("Restoration completed successfully!")
             sys.stdout.flush()
@@ -1020,7 +1066,7 @@ else:
             }
 
             Text {
-              text: "Move apps, AI tools and credentials, proxy services, system configurations, and automated workflows to another Omarchy machine."
+              text: "Move apps, AI tools and credentials, proxy services, user configurations, and system dotfiles to another Omarchy machine."
               font.pixelSize: 12
               color: "#a6adc8"
               wrapMode: Text.WordWrap

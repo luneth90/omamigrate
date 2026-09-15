@@ -351,14 +351,11 @@ for pfile in "${PROXY_SYSTEM_FILES[@]}"; do
   fi
 done
 
+# Record active system services as metadata for reference (no unit files in archive)
 for s in "${PROXY_SYSTEM_SERVICES[@]}"; do
-  sfile="/etc/systemd/system/$s"
-  if [ -f "$sfile" ]; then
-    if [ -r "$sfile" ]; then
-      readable_paths+=("$sfile")
-    else
-      unreadable_paths+=("$sfile")
-    fi
+  if systemctl is-active --quiet "$s" 2>/dev/null; then
+    mkdir -p "${BACKUP_DIR}/pkg_meta"
+    echo "$s" >> "${BACKUP_DIR}/pkg_meta/active_proxy_services.txt"
   fi
 done
 

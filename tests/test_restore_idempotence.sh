@@ -141,7 +141,7 @@ snapshot_state() {
   {
     find "$TEST_ROOT/etc" "$TEST_ROOT/home" "$TEST_ROOT/var-lib" \
       -printf '%y %m %P\n' -type f -exec sha256sum {} +
-    readlink "$TEST_ROOT/home/.config/systemd/user/icloud-mail-triage.timer" 2>/dev/null || true
+    find "$TEST_ROOT/home/.config/systemd/user" -type l -exec readlink {} + 2>/dev/null || true
   } | sha256sum | cut -d' ' -f1
 }
 

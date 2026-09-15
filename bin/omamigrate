@@ -10,12 +10,12 @@ LIB_DIR="$(cd "${BIN_DIR}/../lib" && pwd)"
 source "${LIB_DIR}/core.sh"
 source "${LIB_DIR}/ai-state.sh"
 
-VERSION="1.1.7"
+VERSION="1.1.8"
 
 show_help() {
   cat << HELP_TXT
 OmaMigrate v${VERSION}
-Move apps, AI credentials, proxy services, system configurations, and workflows between Omarchy machines.
+Move apps, AI credentials, proxy services, user configurations, and system dotfiles between Omarchy machines.
 
 Usage:
   omamigrate <command> [options]
@@ -72,7 +72,7 @@ show_restore_help() {
 Usage:
   omamigrate restore <backup_file>
 
-Restore apps, AI credentials, proxy services, system configurations, and workflows from a specific migration backup.
+Restore apps, AI credentials, proxy services, user configurations, and system dotfiles from a specific migration backup.
 
 Arguments:
   backup_file  Path to the .tar.gz or .tgz migration backup
@@ -108,7 +108,7 @@ show_status_help() {
 Usage:
   omamigrate status
 
-Show a summary of packages, desktop configurations, AI tools, proxy services, and automated workflows available for migration.
+Show a summary of packages, desktop configurations, AI tools, proxy services, and user systemd units available for migration.
 
 Options:
   -h, --help  Show this help message
@@ -330,9 +330,7 @@ cmd_status() {
   { [ -d "${XDG_CONFIG_HOME:-$HOME/.config}/opencode" ] || \
     [ -d "${XDG_DATA_HOME:-$HOME/.local/share}/opencode" ]; } && ai_agents+=("OpenCode")
   msg_step "AI CLI agents         : ${ai_agents[*]:-None}"
-  msg_step "Sing-box configured   : $([ -f /etc/sing-box/config.json ] && echo 'Yes (/etc/sing-box/config.json)' || echo 'No')"
-  msg_step "Email triage timer    : $(systemctl --user is-enabled icloud-mail-triage.timer 2>/dev/null || echo 'Not configured')"
-  msg_step "Node rotate timer     : $(systemctl is-enabled sing-box-node-rotate.timer 2>/dev/null || echo 'Not configured')"
+  msg_step "User systemd units    : $([ -d "$HOME/.config/systemd/user" ] && find "$HOME/.config/systemd/user" -maxdepth 1 \( -name '*.service' -o -name '*.timer' \) 2>/dev/null | wc -l || echo '0') configured"
 }
 
 main() {

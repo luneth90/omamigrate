@@ -40,7 +40,6 @@ CONFIG_TARGETS=(
   "starship.toml"
   "systemd"
   "mise"
-  "icloud-mail-triage"
   "himalaya"
   "aerc"
   "neomutt"
@@ -77,14 +76,11 @@ PROXY_SYSTEM_DIRS=(
 # System-level proxy individual files to backup if present
 PROXY_SYSTEM_FILES=(
   "/etc/proxychains.conf"
-  "/usr/local/bin/sing-box-node-rotate"
 )
 
 # System-level proxy systemd service & timer units
 PROXY_SYSTEM_SERVICES=(
   "sing-box.service"
-  "sing-box-node-rotate.service"
-  "sing-box-node-rotate.timer"
   "mihomo.service"
   "v2raya.service"
   "xray.service"
