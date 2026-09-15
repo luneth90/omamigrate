@@ -2,7 +2,7 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-> OmaMigrate creates portable backups of installed package lists, selected user configurations, AI credentials and optional session history, proxy and system service configurations, and automated workflows—then restores them on another Omarchy machine.
+> OmaMigrate creates portable backups of installed package lists, desktop and shell configurations, AI developer credentials and optional session history, proxy services, and system dotfiles—then restores them seamlessly on another Omarchy machine.
 
 [![CI](https://github.com/luneth90/omamigrate/actions/workflows/ci.yml/badge.svg)](https://github.com/luneth90/omamigrate/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/luneth90/omamigrate/actions/workflows/codeql.yml/badge.svg)](https://github.com/luneth90/omamigrate/actions/workflows/codeql.yml)
@@ -31,7 +31,7 @@ Traditional dotfiles sync tools (such as Git-based UI sync widgets) only copy ba
 - Re-installing dozens of GUI applications and CLI packages;
 - Re-configuring network proxy services (**sing-box**, **Mihomo / Clash Verge**, **v2rayA**, **daed**, etc.) and system timers;
 - Re-authenticating all your **AI developer tools** (Claude Code, OpenAI Codex, Agy CLI, Pi, OMP, OpenCode, Grok);
-- Repairing broken automated services or email clients due to missing GPG keys or `pass` password stores;
+- Re-importing GPG keys, SSH keys, Unix password stores (`pass`), and desktop keyrings;
 - Manually fixing broken absolute paths when your username on the new machine differs from the old machine.
 
 **OmaMigrate** addresses these tasks with a unified, cross-architecture migration workflow for selected system and user state:
@@ -40,9 +40,9 @@ Traditional dotfiles sync tools (such as Git-based UI sync widgets) only copy ba
 [ Old Omarchy Machine ]                                   [ New Omarchy Machine ]
   ├── Explicit Packages (Filtered)                          ├── Auto-install Packages (yay/pacman)
   ├── Proxy Ecosystem (sing-box/Mihomo/Clash/v2rayA/daed) === LocalSend (local network) ===> ├── Restore Services & Auto-enable Timers
-  ├── Mail Profiles & Pass/GPG Keys     Archive (tar)       ├── Restore GPG Keys & Password Store
+  ├── Desktop Configs, SSH/GPG Keys & Pass Store  (tar)     ├── Restore GPG Keys, SSH Keys & Password Store
   ├── AI Sessions (Claude/Codex/Agy/Pi/OMP/OpenCode/Grok)   ├── Restore AI Credentials & Sessions
-  └── Desktop & Hyprland Configs                            └── Auto-adapt Username Paths & Reload
+  └── Shell Profiles & Hyprland Configs                     └── Auto-adapt Username Paths & Reload
 ```
 
 ---
@@ -57,7 +57,7 @@ Traditional dotfiles sync tools (such as Git-based UI sync widgets) only copy ba
 ### 2. Universal Mainstream Proxy Ecosystem Support (Multi-Proxy Ready)
 Whether you prefer background daemons or modern GUI desktop clients, OmaMigrate backs up supported configurations and attempts to reactivate their services after restoration:
 - **System Daemons & Transparent Proxies**:
-  - **sing-box**: Preserves `/etc/sing-box/` rule configurations, `640 root:sing-box` group permissions, node auto-rotation scripts, and systemd service/timer units.
+  - **sing-box**: Preserves `/etc/sing-box/` rule configurations, `640 root:sing-box` group permissions, TUN device module setup, and enables the official `sing-box.service` system daemon.
   - **Mihomo (formerly Clash.Meta)**: Restores `/etc/mihomo/` system configurations, `~/.config/mihomo/` user configurations, and `mihomo.service`.
   - **v2rayA / Xray / v2ray**: Restores `/etc/v2raya/`, `/etc/xray/`, `/etc/v2ray/`, and enables corresponding background systemd services.
   - **daed / daed-next**: Migrates eBPF-based high-performance transparent proxy configurations (`/etc/daed/`) and daemon services.
@@ -71,14 +71,15 @@ Whether you prefer background daemons or modern GUI desktop clients, OmaMigrate 
 - **Terminal & Global Proxy Utilities**:
   - Automatically migrates **Proxychains-ng** (`~/.proxychains`, `/etc/proxychains.conf`) and shell environment proxy wrappers.
 
-### 3. Email Clients & Automated Workflow Migration
-- **Desktop & CLI Mail Clients**:
-  - **Desktop Clients (e.g. Thunderbird)**: Backs up and restores `~/.thunderbird/` profiles, account settings, offline mail stores, and local keyrings. Compatible profiles can be reused on the new machine, though the client may still request re-authentication.
-  - **Terminal / CLI Clients**: Backs up configuration trees for `Himalaya`, `Aerc`, and `Neomutt`.
+### 3. Desktop Configurations, CLI Tools & Password Stores
+- **Desktop & Shell Environments**:
+  - Automatically migrates Hyprland, Waybar, Alacritty, Foot, Kitty, Ghostty, Fish, Zsh, Bash, Starship, and Mise runtime environments.
+- **Universal CLI & Mail Utilities**:
+  - Preserves standard configuration trees for email clients (`Himalaya`, `Aerc`, `Neomutt`, and `Thunderbird`).
 - **Secure Password & GPG Credential Store**:
-  - Packages **GPG keys** (`~/.gnupg`) and the **Unix password store** (`~/.password-store`) so `pass`-based credential workflows can be restored.
-- **Automation Scripts & Background Timers**:
-  - Preserves custom mail management, triage, or automated notification scripts under `~/.local/bin/` and their associated `systemd --user` timers.
+  - Packages **GPG keys** (`~/.gnupg`), **SSH keys** (`~/.ssh`), and the **Unix password store** (`~/.password-store`) so `pass`-based credential workflows and Git signing keys can be restored seamlessly.
+- **User Services & Systemd Units**:
+  - Migrates user-level utility configs and user systemd units under `~/.config/systemd/user/` (such as the Mihoro background service) and automatically reloads unit files on restoration.
 
 ### 4. AI Credentials, Sessions & System Keyring Persistence
 - **Linux Secret Service & Keyring Sync**:
@@ -123,8 +124,8 @@ Whether you prefer background daemons or modern GUI desktop clients, OmaMigrate 
 | **Scope** | UI config files (`~/.config/hypr`) | **Selected system and user state** |
 | **Application Packages** | ❌ None (must install manually) | ✅ **Restore missing packages via yay/pacman** |
 | **Hardware Compatibility** | ⚠️ Can break if device-bound | ✅ **Smart hardware driver filtering** |
-| **sing-box & System Daemons** | ❌ No system-level file support | ✅ **Supported /etc and systemd files** |
-| **AI Workflows (Mail Triage)** | ❌ Missing GPG/Pass credentials | ✅ **Selected workflows and timers restored** |
+| **sing-box & System Daemons** | ❌ No system-level file support | ✅ **Supported /etc configs and systemd services** |
+| **Secrets & Password Stores** | ❌ Missing GPG/Pass/SSH keys | ✅ **Restores GPG, Pass, SSH, and System Keyrings** |
 | **AI CLI Login Sessions** | ❌ Requires re-login everywhere | ✅ **Restores saved credentials and sessions when still valid** |
 | **Different Usernames** | ❌ Breaks on hardcoded `/home/user` | ✅ **Automatic path translation** |
 

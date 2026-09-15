@@ -97,12 +97,12 @@ class TestMigrationParsers(unittest.TestCase):
     def test_symlink_adaptation(self):
         old_home = "/home/olduser"
         new_home = "/home/newuser"
-        target = "/home/olduser/.config/systemd/user/icloud-mail-triage.timer"
+        target = "/home/olduser/.config/systemd/user/mail-sync.timer"
         if target.startswith(old_home):
             new_target = new_home + target[len(old_home):]
         else:
             new_target = target
-        self.assertEqual(new_target, "/home/newuser/.config/systemd/user/icloud-mail-triage.timer")
+        self.assertEqual(new_target, "/home/newuser/.config/systemd/user/mail-sync.timer")
 
     def test_temp_backup_file_filtering(self):
         import re
@@ -147,9 +147,10 @@ class TestRestoreContract(unittest.TestCase):
         self.assertIn('systemctl is-active --quiet "${srv}.service"', self.restore)
         self.assertIn('record_restore_error "Could not restart ${srv}.service."', self.restore)
 
-    def test_timer_is_stopped_before_system_config_deployment(self):
-        stop = "systemctl stop sing-box-node-rotate.timer"
+    def test_user_service_cleanup_before_deployment(self):
+        stop = "systemctl --user stop mihomo.service"
         deploy = 'msg_step "Deploying /etc system configs..."'
+        self.assertIn(stop, self.restore)
         self.assertLess(self.restore.index(stop), self.restore.index(deploy))
 
     def test_package_restore_never_performs_partial_upgrade_sync(self):
@@ -252,6 +253,17 @@ class TestRestoreContract(unittest.TestCase):
         self.assertIn('"--"', runner_code)
         self.assertIn("unreadable_operands", runner_code)
         self.assertIn("ALLOWLIST", runner_code)
+        self.assertNotIn("sing-box-node-rotate", runner_code, "Executable sing-box-node-rotate must not exist in privileged runner")
+        self.assertNotIn("sing-box-node-rotate", self.export, "Export script must not include sing-box-node-rotate")
+        self.assertNotIn("sing-box-node-rotate", self.restore, "Restore script must not include sing-box-node-rotate")
+        self.assertNotIn("sing-box-node-rotate", self.core, "Core script must not include sing-box-node-rotate")
+        self.assertNotIn("icloud-mail-triage", self.export, "Export script must not include icloud-mail-triage")
+        self.assertNotIn("icloud-mail-triage", self.restore, "Restore script must not include icloud-mail-triage")
+        self.assertNotIn("icloud-mail-triage", self.core, "Core script must not include icloud-mail-triage")
+        self.assertIn("stat.S_ISREG", runner_code, "Runner must enforce regular file check on staged configs")
+        self.assertIn("0o111", runner_code, "Runner must reject executable bits on restored configs")
+        self.assertIn("tarfile.open", runner_code, "Runner must construct in-memory tar stream")
+        self.assertIn("valid_stage", runner_code, "Runner must validate staging path integrity")
 
     def test_force_close_button_contract(self):
         self.assertIn("id: forceCloseBtn", self.qml)

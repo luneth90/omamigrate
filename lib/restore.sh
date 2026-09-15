@@ -39,8 +39,6 @@ SING_BOX_READY=true
 SING_BOX_REQUESTED=false
 SING_BOX_TUN_REQUIRED=false
 TUN_MODULE_IS_MODULAR=false
-ROTATE_TIMER_REQUESTED=false
-USER_TIMER_REQUESTED=false
 USER_MIHOMO_REQUESTED=false
 PRESERVE_OMAMIGRATE=false
 AI_BACKUP_MODE="$(cat "${RESTORE_DATA_DIR}/pkg_meta/ai_backup_mode.txt" 2>/dev/null || true)"
@@ -85,20 +83,12 @@ if [ "$AI_STATE_HELPER_READY" = true ]; then
   fi
 fi
 
-if [ -d "${RESTORE_DATA_DIR}/system_root/etc/sing-box" ] || \
-   [ -f "${RESTORE_DATA_DIR}/system_root/etc/systemd/system/sing-box.service" ]; then
+if [ -d "${RESTORE_DATA_DIR}/system_root/etc/sing-box" ]; then
   SING_BOX_REQUESTED=true
 fi
 if grep -RqsE '"type"[[:space:]]*:[[:space:]]*"tun"' \
     --include='*.json' "${RESTORE_DATA_DIR}/system_root/etc/sing-box" 2>/dev/null; then
   SING_BOX_TUN_REQUIRED=true
-fi
-if [ -f "${RESTORE_DATA_DIR}/system_root/etc/systemd/system/sing-box-node-rotate.timer" ]; then
-  ROTATE_TIMER_REQUESTED=true
-  SING_BOX_REQUESTED=true
-fi
-if [ -f "${RESTORE_DATA_DIR}/user_home/.config/systemd/user/icloud-mail-triage.timer" ]; then
-  USER_TIMER_REQUESTED=true
 fi
 if [ -f "${RESTORE_DATA_DIR}/user_home/.config/systemd/user/mihomo.service" ] || \
    [ -L "${RESTORE_DATA_DIR}/user_home/.config/systemd/user/mihomo.service" ]; then
@@ -221,16 +211,6 @@ if [ -d "${RESTORE_DATA_DIR}/user_home" ]; then
     PRESERVE_OMAMIGRATE=true
   fi
 
-  if [ "$USER_TIMER_REQUESTED" = true ]; then
-    if systemctl --user is-active --quiet icloud-mail-triage.timer 2>/dev/null && \
-       ! systemctl --user stop icloud-mail-triage.timer; then
-      record_restore_error "Could not stop the active email triage timer before deployment."
-    fi
-    if systemctl --user is-active --quiet icloud-mail-triage.service 2>/dev/null && \
-       ! systemctl --user stop icloud-mail-triage.service; then
-      record_restore_error "Could not stop the active email triage service before deployment."
-    fi
-  fi
   if [ "$USER_MIHOMO_REQUESTED" = true ] && \
      systemctl --user is-active --quiet mihomo.service 2>/dev/null && \
      ! systemctl --user stop mihomo.service; then
@@ -483,32 +463,30 @@ if [ "${OMAMIGRATE_RESTORE_PHASE:-}" = "user" ]; then
 elif [ -d "${RESTORE_DATA_DIR}/system_root" ]; then
   msg_info "Restoring system-level proxy configurations..."
 
-  # An already-active Persistent timer can fire while files are being copied.
-  # Stop it before deployment; it is stamped and started again in Step 9.
-  if [ "$ROTATE_TIMER_REQUESTED" = true ]; then
-    if $ELEVATOR systemctl is-active --quiet sing-box-node-rotate.timer 2>/dev/null && \
-       ! $ELEVATOR systemctl stop sing-box-node-rotate.timer; then
-      record_restore_error "Could not stop the active sing-box rotation timer before deployment."
-    fi
-    if $ELEVATOR systemctl is-active --quiet sing-box-node-rotate.service 2>/dev/null && \
-       ! $ELEVATOR systemctl stop sing-box-node-rotate.service; then
-      record_restore_error "Could not stop the active sing-box rotation service before deployment."
-    fi
-  fi
-
   msg_step "Deploying /etc system configs..."
-  # Do not copy the staging directory's own metadata onto `/`, and do not
-  # preserve the staging user's ownership for privileged files.
-  SYSTEM_ROOT_ITEMS=()
-  shopt -s nullglob dotglob
-  for system_root_item in "${RESTORE_DATA_DIR}/system_root"/*; do
-    SYSTEM_ROOT_ITEMS+=("$(basename -- "$system_root_item")")
+  ALLOWED_RESTORE_DIRS=(
+    "etc/sing-box"
+    "etc/mihomo"
+    "etc/v2raya"
+    "etc/xray"
+    "etc/v2ray"
+    "etc/daed"
+  )
+  for etc_dir in "${ALLOWED_RESTORE_DIRS[@]}"; do
+    if [ -d "${RESTORE_DATA_DIR}/system_root/${etc_dir}" ]; then
+      $ELEVATOR mkdir -p "/${etc_dir}"
+      if ! tar -C "${RESTORE_DATA_DIR}/system_root/${etc_dir}" -cf - -- . | \
+           $ELEVATOR tar -C "/${etc_dir}" --no-same-owner --no-overwrite-dir -xpf -; then
+        record_restore_error "Could not deploy /${etc_dir}."
+      fi
+    fi
   done
-  shopt -u nullglob dotglob
-  if [ ${#SYSTEM_ROOT_ITEMS[@]} -gt 0 ] && \
-     ! tar -C "${RESTORE_DATA_DIR}/system_root" -cf - -- "${SYSTEM_ROOT_ITEMS[@]}" | \
-       $ELEVATOR tar -C / --no-same-owner --no-overwrite-dir -xpf -; then
-      record_restore_error "System-level configurations could not be deployed."
+  if [ -f "${RESTORE_DATA_DIR}/system_root/etc/proxychains.conf" ]; then
+    if ! $ELEVATOR cp -p "${RESTORE_DATA_DIR}/system_root/etc/proxychains.conf" /etc/proxychains.conf; then
+      record_restore_error "Could not deploy /etc/proxychains.conf."
+    else
+      $ELEVATOR chown root:root /etc/proxychains.conf && $ELEVATOR chmod 644 /etc/proxychains.conf
+    fi
   fi
   for system_config_name in sing-box mihomo v2raya xray v2ray daed; do
     if [ -d "${RESTORE_DATA_DIR}/system_root/etc/${system_config_name}" ] && \
@@ -518,29 +496,6 @@ elif [ -d "${RESTORE_DATA_DIR}/system_root" ]; then
         record_restore_error "Could not remove stale files from /etc/${system_config_name}."
     fi
   done
-
-  for unit_name in sing-box.service sing-box-node-rotate.service sing-box-node-rotate.timer \
-                   mihomo.service v2raya.service xray.service v2ray.service daed.service daed-next.service; do
-    unit_source="${RESTORE_DATA_DIR}/system_root/etc/systemd/system/${unit_name}"
-    unit_target="/etc/systemd/system/${unit_name}"
-    if [ -e "$unit_source" ] || [ -L "$unit_source" ]; then
-      if ! $ELEVATOR chown -h root:root "$unit_target"; then
-        record_restore_error "Could not secure restored unit ${unit_name}."
-      elif [ ! -L "$unit_target" ] && ! $ELEVATOR chmod 644 "$unit_target"; then
-        record_restore_error "Could not set permissions on restored unit ${unit_name}."
-      fi
-    fi
-  done
-  if [ -f "${RESTORE_DATA_DIR}/system_root/usr/local/bin/sing-box-node-rotate" ] && \
-     [ -f "/usr/local/bin/sing-box-node-rotate" ] && \
-     ! { $ELEVATOR chown root:root /usr/local/bin/sing-box-node-rotate && \
-         $ELEVATOR chmod 755 /usr/local/bin/sing-box-node-rotate; }; then
-    record_restore_error "Could not secure the sing-box node rotation script."
-  fi
-  if [ -f "/etc/proxychains.conf" ] && \
-     ! { $ELEVATOR chown root:root /etc/proxychains.conf && $ELEVATOR chmod 644 /etc/proxychains.conf; }; then
-    record_restore_error "Could not secure /etc/proxychains.conf."
-  fi
   if [ ${#RESTORE_ERRORS[@]} -eq 0 ]; then
     msg_ok "System-level configurations restored."
   fi
@@ -896,28 +851,11 @@ if [ "${OMAMIGRATE_RESTORE_PHASE:-}" != "user" ]; then
       fi
     fi
   done
-
-  if [ "$ROTATE_TIMER_REQUESTED" = true ]; then
-    msg_step "Enabling sing-box-node-rotate timer..."
-    # Prevent systemd Persistent=true from immediately triggering node rotation during restore
-    if [ "$SING_BOX_READY" != true ]; then
-      msg_warn "Leaving sing-box-node-rotate.timer stopped because sing-box is not healthy."
-    elif ! $ELEVATOR install -d -m 755 /var/lib/systemd/timers || \
-         ! $ELEVATOR touch /var/lib/systemd/timers/stamp-sing-box-node-rotate.timer; then
-      record_restore_error "Could not update the sing-box rotation timer timestamp."
-    else
-      $ELEVATOR systemctl reset-failed sing-box-node-rotate.timer 2>/dev/null || true
-      if ! $ELEVATOR systemctl enable --now sing-box-node-rotate.timer || \
-         ! $ELEVATOR systemctl is-active --quiet sing-box-node-rotate.timer; then
-        record_restore_error "sing-box-node-rotate.timer could not be activated."
-      fi
-    fi
-  fi
 fi
 
 # User-level services and timers restored from the archive.
-if [ "$USER_MIHOMO_REQUESTED" = true ] || [ "$USER_TIMER_REQUESTED" = true ]; then
-  if ! systemctl --user daemon-reload; then
+if [ "$USER_MIHOMO_REQUESTED" = true ] || [ -d "${RESTORE_DATA_DIR}/user_home/.config/systemd/user" ]; then
+  if ! systemctl --user daemon-reload 2>/dev/null; then
     record_restore_error "The user systemd manager could not reload unit files."
   fi
 fi
@@ -940,14 +878,6 @@ if [ "$USER_MIHOMO_REQUESTED" = true ]; then
   fi
 fi
 
-if [ "$USER_TIMER_REQUESTED" = true ]; then
-  msg_step "Enabling daily email triage timer..."
-  systemctl --user reset-failed icloud-mail-triage.timer 2>/dev/null || true
-  if ! systemctl --user enable --now icloud-mail-triage.timer || \
-     ! systemctl --user is-active --quiet icloud-mail-triage.timer; then
-    record_restore_error "icloud-mail-triage.timer could not be activated."
-  fi
-fi
 if [ ${#RESTORE_ERRORS[@]} -eq 0 ]; then
   msg_ok "Background services and timers activated."
 fi

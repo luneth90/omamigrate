@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.8] - 2026-09-15
+
+### Security & Hardening
+- **Data/Code Decoupling & Elimination of Executable Restores**: Completely purged arbitrary executable script restoration (`/usr/local/bin/sing-box-node-rotate`) and archive-supplied systemd units (`/etc/systemd/system/*.service`, `*.timer`). The migration bundle strictly backs up and restores passive configuration data only (`/etc/sing-box/*.json`, `/etc/mihomo/`, `/etc/v2raya/`, `/etc/xray/`, `/etc/v2ray/`, `/etc/daed/`, `/etc/proxychains.conf`).
+- **Staging Path Integrity & Trust Verification**: The privileged runner strictly validates `stage_ready_dir` emitted by user-space workers, verifying canonical path prefixes, directory attributes (`S_ISDIR`), user ownership (`st_uid == getuid()`), non-world-writable permissions, and absence of symlinks.
+- **Descriptor-Based Staging Transfer (`O_NOFOLLOW` / In-Memory Streams)**: Passive configuration files in user staging are opened exclusively via `os.open` with `O_RDONLY | O_NOFOLLOW`. File descriptors are validated via `fstat` (regular files only `S_ISREG`, execute bits strictly zero `not (st_mode & 0o111)`), and file bytes are loaded directly into memory. In-memory tar streams are constructed and piped into root `tar`, completely eliminating TOCTOU staging-swap attacks and directory race conditions.
+- **Audited Service Activation**: System services (`sing-box.service`, `mihomo.service`, etc.) are activated strictly from pacman package-managed units verified via `systemctl list-unit-files`, completely eliminating archive-supplied unit file deployment and root command execution.
+- **Adversarial Worker & Staging-Swap Regression Test**: Added Regression Test 6 to `tests/test_credential_isolation.sh` simulating concurrent staging-swap, executable payload injection, and unit tampering, proving that all attack vectors are strictly rejected.
+
+### Generalization & Universal Configurations
+- **Universal Configuration Focus**: Cleaned up personal tailored workflows (`sing-box-node-rotate` and `icloud-mail-triage`), generalizing systemd user unit handling and status reporting for official marketplace distribution.
+- **Documentation & Descriptions**: Updated documentation (`README.md`, `README.zh-CN.md`, `manifest.json`, `bin/omamigrate`, and `OmaMigrate.qml`) to focus on universal desktop dotfiles, development environments, and security credential preservation.
+
 ## [1.1.7] - 2026-09-09
 
 ### Security & Hardening

@@ -2,7 +2,7 @@
 
 [English](README.md) | **简体中文**
 
-> OmaMigrate 可将已安装软件包清单、选定的用户配置、AI 凭据及可选会话历史、代理与系统服务配置和自动化工作流打包，并恢复到另一台 Omarchy 设备。
+> OmaMigrate 可将已安装软件包清单、桌面与终端配置、AI 开发者凭据及可选会话历史、网络代理与系统配置打包，并安全无缝地恢复到另一台 Omarchy 设备。
 
 [![CI](https://github.com/luneth90/omamigrate/actions/workflows/ci.yml/badge.svg)](https://github.com/luneth90/omamigrate/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/luneth90/omamigrate/actions/workflows/codeql.yml/badge.svg)](https://github.com/luneth90/omamigrate/actions/workflows/codeql.yml)
@@ -31,7 +31,7 @@
 - 手动重新安装几十个 GUI 桌面软件与开发应用；
 - 手动重新配置主流代理服务（**sing-box**、**Mihomo / Clash Verge**、**v2rayA**、**daed** 等）及定时器；
 - 手动重新登录所有的 **AI 命令行工具**（Claude Code、OpenAI Codex、Agy CLI、Pi、OMP、OpenCode、xAI Grok）；
-- **邮件与定时自动化服务** 因缺少 GPG 密钥、`pass` 密码库或用户 systemd 定时器而无法工作；
+- **开发与密钥凭据** 丢失，导致 SSH 密钥、GPG 签名、`pass` 密码库以及系统桌面密钥环需要全部重新生成与配置；
 - 新老电脑用户名不同（如从 `alice` 变成 `bob`）时，因配置中残留的绝对路径报错。
 
 **OmaMigrate** 通过统一的跨架构迁移流程，帮助迁移选定的系统状态和用户数据：
@@ -40,7 +40,7 @@
 [ 老电脑 (源机器) ]                                      [ 新电脑 (目标机器) ]
   ├── 显式应用清单 (自动过滤硬件驱动)                     ├── 差异化静默补齐安装 (yay/pacman)
   ├── 代理生态 (sing-box/Mihomo/Clash/v2rayA/daed) === LocalSend 局域网直传 ===> ├── 还原系统服务并自启定时器
-  ├── 邮件客户端配置、GPG与pass密码库     迁移归档包 (tar)    ├── 还原 GPG 密钥与密码库
+  ├── 桌面配置、SSH/GPG密钥与pass密码库   迁移归档包 (tar)    ├── 还原 SSH/GPG 密钥与密码库
   ├── AI 会话 (Claude/Codex/Agy/Pi/OMP/OpenCode/Grok)      ├── 恢复 AI 凭据与会话
   └── 桌面环境与终端配置                                  └── 自动纠偏用户名路径并热重载
 ```
@@ -57,7 +57,7 @@
 ### 2. 全主流代理生态深度支持 (Multi-Proxy Ready)
 无论使用系统级常驻守护进程还是 GUI 桌面客户端，OmaMigrate 都会备份受支持的配置，并在恢复后尝试重新启用相关服务：
 - **系统核心服务 (Daemon & Transparent Proxy)**：
-  - **sing-box**：自动备份还原 `/etc/sing-box/` 规则配置、安全组权限（`640 root:sing-box`）、自动轮换脚本及 `sing-box.service` / timer 定时器。
+  - **sing-box**：自动备份还原 `/etc/sing-box/` 规则配置、安全组权限（`640 root:sing-box`）、TUN 虚拟网卡持久化配置，并自启官方 `sing-box.service` 守护进程。
   - **Mihomo (原 Clash.Meta)**：完整备份 `/etc/mihomo/` 系统核心配置、`~/.config/mihomo/` 用户配置与 `mihomo.service`。
   - **v2rayA / Xray / v2ray**：完整备份 `/etc/v2raya/`、`/etc/xray/`、`/etc/v2ray/` 与对应后台服务并自启。
   - **daed / daed-next**：支持基于 eBPF 的高性能透明代理配置 `/etc/daed/` 与后台常驻服务。
@@ -71,15 +71,15 @@
 - **终端与全局代理辅助**：
   - 自动备份与还原 **Proxychains-ng**（`~/.proxychains`、`/etc/proxychains.conf`）与终端代理函数。
 
-### 3. 邮件客户端与定时自动化工作流迁移
-- **主流邮件客户端配置迁移**：
-  - **桌面客户端（Thunderbird 等）**：打包并还原 `~/.thunderbird/` 用户 Profile、账户配置、离线邮箱缓存与本地凭证环；兼容的配置可在新机继续使用，客户端仍可能要求重新认证。
-  - **终端/CLI 客户端**：备份 `Himalaya`、`Aerc`、`Neomutt` 等命令行邮件客户端配置目录。
-- **凭据与密钥库安全继承**：
-  - 打包 **GPG 密钥库**（`~/.gnupg`）与 **Unix 密码管理器**（`~/.password-store`），用于恢复基于 `pass` 的凭据工作流。
-- **自动化工作流与后台定时器**：
-  - 自动保留 `~/.local/bin/` 里的邮件管理/分类/清理脚本（例如基于 `agy` 或各类模型的自动化工具）。
-  - 自动注册并激活对应的 `systemd --user` 每日定时器。
+### 3. 桌面与终端通用配置、密码库与开发环境
+- **桌面与 Shell 环境通用配置**：
+  - 完整迁移 Hyprland、Waybar、Alacritty、Foot、Kitty、Ghostty、Fish、Zsh、Bash、Starship 以及 Mise 运行时环境配置。
+- **开源 CLI 与邮件工具配置**：
+  - 支持 `Himalaya`、`Aerc`、`Neomutt` 等终端邮件工具及 `Thunderbird` 客户端配置目录的迁移。
+- **凭据、SSH 与密钥库安全继承**：
+  - 打包 **GPG 密钥库**（`~/.gnupg`）、**SSH 密钥**（`~/.ssh`）与 **Unix 密码管理器**（`~/.password-store`），确保基于 `pass` 的密码管理工作流与 Git 代码提交签名无缝继承。
+- **用户级服务与通用配置**：
+  - 支持 `~/.config/systemd/user/` 用户级服务单元配置（如 Mihoro 守护进程等），并在还原后自动执行 `systemctl --user daemon-reload`。
 
 ### 4. AI 凭据、会话与系统 Keyring 迁移
 - **Linux 桌面 Secret Service 密钥库完整同步**：
